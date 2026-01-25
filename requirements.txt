@@ -3,4 +3,5 @@ python-dotenv
 httpx
 pandas
 neo4j
+scikit-learn
 

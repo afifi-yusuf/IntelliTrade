@@ -1,305 +1,206 @@
 import os
-import httpx
+import pandas as pd
 from dotenv import load_dotenv
 from openai import AzureOpenAI
 from datetime import datetime
 import json
+import glob
+# Import Graph Manager
+from graph_manager import Neo4jHandler
 
 load_dotenv()
 
-# Initialize clients
-finnhub_api_key = os.getenv("FINNHUB_API_KEY")
-alpha_vantage_api_key = os.getenv("ALPHA_VANTAGE_API_KEY")
+# Initialize API clients (Client for Azure only)
 azure_client = AzureOpenAI(
     api_key=os.getenv("AZURE_OPENAI_API_KEY"),
     azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
     api_version="2024-02-01"
 )
 
+# Initialize Neo4j Handler
+try:
+    graph_db = Neo4jHandler()
+except:
+    graph_db = None
+    print("⚠️ Could not initialize Neo4j connection. Graph features will be disabled.")
 
-def fetch_earnings_calendar(ticker: str) -> dict:
-    """
-    Fetch earnings calendar from Finnhub API.
-    Note: Free tier primarily provides upcoming earnings dates.
-    Historical data may be limited or unavailable.
-    """
-    url = "https://finnhub.io/api/v1/calendar/earnings"
-    
-    params = {
-        "symbol": ticker.upper(),
-        "token": finnhub_api_key
-    }
-    
+# Directory where local data is stored
+DATA_DIR = "data"
+
+def load_csv_data(ticker: str, file_suffix: str) -> dict:
+    """Helper to load local CSV data and convert to dict/json-compatible format."""
+    # Try both uppercase and original case ticker just in case
+    filename = os.path.join(DATA_DIR, f"{ticker.upper()}_{file_suffix}")
+    if not os.path.exists(filename):
+        # Try lowercase?
+        filename_lower = os.path.join(DATA_DIR, f"{ticker.lower()}_{file_suffix}")
+        if os.path.exists(filename_lower):
+            filename = filename_lower
+        else:
+            print(f"  ⚠️  File not found: {filename}")
+            return None
+            
     try:
-        with httpx.Client(timeout=30.0) as client:
-            response = client.get(url, params=params)
-            response.raise_for_status()
-            data = response.json()
-            return data
-    except httpx.HTTPError as e:
-        print(f"Error fetching earnings calendar: {e}")
+        df = pd.read_csv(filename)
+        # Convert to dict (list of records)
+        return df.to_dict(orient="records")
+    except Exception as e:
+        print(f"  ❌ Error reading {filename}: {e}")
         return None
-
-
-def fetch_earnings_surprise(ticker: str) -> dict:
-    """Fetch earnings surprise data from Finnhub API (free tier: up to 1 year of data)."""
-    url = "https://finnhub.io/api/v1/stock/earnings"
-    params = {
-        "symbol": ticker.upper(),
-        "token": finnhub_api_key
-    }
-    
-    # Free tier provides up to 1 year of earnings data without needing limit parameter
-    try:
-        with httpx.Client(timeout=30.0) as client:
-            response = client.get(url, params=params)
-            response.raise_for_status()
-            return response.json()
-    except httpx.HTTPError as e:
-        print(f"Error fetching earnings surprise: {e}")
-        return None
-
-
-def fetch_company_profile(ticker: str) -> dict:
-    """Fetch company profile from Finnhub API (free tier)."""
-    url = "https://finnhub.io/api/v1/stock/profile2"
-    params = {
-        "symbol": ticker.upper(),
-        "token": finnhub_api_key
-    }
-    
-    try:
-        with httpx.Client(timeout=30.0) as client:
-            response = client.get(url, params=params)
-            response.raise_for_status()
-            return response.json()
-    except httpx.HTTPError as e:
-        print(f"Error fetching company profile: {e}")
-        return None
-
-
-def fetch_basic_financials(ticker: str) -> dict:
-    """Fetch basic financial metrics from Finnhub API (free tier)."""
-    url = "https://finnhub.io/api/v1/stock/metric"
-    params = {
-        "symbol": ticker.upper(),
-        "metric": "all",
-        "token": finnhub_api_key
-    }
-    
-    try:
-        with httpx.Client(timeout=30.0) as client:
-            response = client.get(url, params=params)
-            response.raise_for_status()
-            return response.json()
-    except httpx.HTTPError as e:
-        print(f"Error fetching basic financials: {e}")
-        return None
-
 
 # ============================================================================
-# ALPHA VANTAGE API FUNCTIONS
+# DATA LOADING FUNCTIONS (LOCAL)
+# ============================================================================
+
+def fetch_company_profile(ticker: str) -> dict:
+    """Load company profile/overview from local CSV."""
+    # We use AV company overview as the main profile source now
+    data = load_csv_data(ticker, "company_overview.csv")
+    if data and len(data) > 0:
+        return data[0] # Return single object
+    return None
+
+def fetch_basic_financials(ticker: str) -> dict:
+    """Load basic financials. using Company Overview as proxy for metrics."""
+    # Returning the same overview data as "metrics" since AV Overview is rich
+    return fetch_company_profile(ticker)
+
+def fetch_earnings_calendar(ticker: str) -> dict:
+    """Load earnings calendar."""
+    data = load_csv_data(ticker, "earnings_calendar.csv")
+    return {"earningsCalendar": data} if data else None
+
+def fetch_earnings_surprise(ticker: str) -> dict:
+    """Load earnings surprise history (from earnings quarterly)."""
+    # AV earnings data contains surprise info
+    data = load_csv_data(ticker, "earnings_quarterly.csv")
+    return data # List of quarters
+
+# ============================================================================
+# ALPHA VANTAGE DATA (LOCAL)
 # ============================================================================
 
 def fetch_av_earnings(ticker: str) -> dict:
-    """Fetch earnings data from Alpha Vantage (more historical data than Finnhub)."""
-    url = "https://www.alphavantage.co/query"
-    params = {
-        "function": "EARNINGS",
-        "symbol": ticker.upper(),
-        "apikey": alpha_vantage_api_key
+    """Load extended earnings history."""
+    # We load both annual and quarterly if needed, but here just return quarterly wrapper
+    quarterly = load_csv_data(ticker, "earnings_quarterly.csv")
+    annual = load_csv_data(ticker, "earnings_annual.csv")
+    return {
+        "quarterlyEarnings": quarterly,
+        "annualEarnings": annual
     }
-    
-    try:
-        with httpx.Client(timeout=30.0) as client:
-            response = client.get(url, params=params)
-            response.raise_for_status()
-            return response.json()
-    except httpx.HTTPError as e:
-        print(f"Error fetching Alpha Vantage earnings: {e}")
-        return None
-
 
 def fetch_av_income_statement(ticker: str) -> dict:
-    """Fetch income statement from Alpha Vantage (annual and quarterly)."""
-    url = "https://www.alphavantage.co/query"
-    params = {
-        "function": "INCOME_STATEMENT",
-        "symbol": ticker.upper(),
-        "apikey": alpha_vantage_api_key
-    }
-    
-    try:
-        with httpx.Client(timeout=30.0) as client:
-            response = client.get(url, params=params)
-            response.raise_for_status()
-            return response.json()
-    except httpx.HTTPError as e:
-        print(f"Error fetching income statement: {e}")
-        return None
-
+    """Load income statement."""
+    quarterly = load_csv_data(ticker, "income_statement_quarterly.csv")
+    return {"quarterlyReports": quarterly}
 
 def fetch_av_balance_sheet(ticker: str) -> dict:
-    """Fetch balance sheet from Alpha Vantage (annual and quarterly)."""
-    url = "https://www.alphavantage.co/query"
-    params = {
-        "function": "BALANCE_SHEET",
-        "symbol": ticker.upper(),
-        "apikey": alpha_vantage_api_key
-    }
-    
-    try:
-        with httpx.Client(timeout=30.0) as client:
-            response = client.get(url, params=params)
-            response.raise_for_status()
-            return response.json()
-    except httpx.HTTPError as e:
-        print(f"Error fetching balance sheet: {e}")
-        return None
-
+    """Load balance sheet."""
+    quarterly = load_csv_data(ticker, "balance_sheet_quarterly.csv")
+    return {"quarterlyReports": quarterly}
 
 def fetch_av_cash_flow(ticker: str) -> dict:
-    """Fetch cash flow statement from Alpha Vantage (annual and quarterly)."""
-    url = "https://www.alphavantage.co/query"
-    params = {
-        "function": "CASH_FLOW",
-        "symbol": ticker.upper(),
-        "apikey": alpha_vantage_api_key
-    }
-    
-    try:
-        with httpx.Client(timeout=30.0) as client:
-            response = client.get(url, params=params)
-            response.raise_for_status()
-            return response.json()
-    except httpx.HTTPError as e:
-        print(f"Error fetching cash flow: {e}")
-        return None
-
+    """Load cash flow statement."""
+    quarterly = load_csv_data(ticker, "cash_flow_quarterly.csv")
+    return {"quarterlyReports": quarterly}
 
 def fetch_av_overview(ticker: str) -> dict:
-    """Fetch company overview from Alpha Vantage."""
-    url = "https://www.alphavantage.co/query"
-    params = {
-        "function": "OVERVIEW",
-        "symbol": ticker.upper(),
-        "apikey": alpha_vantage_api_key
-    }
-    
-    try:
-        with httpx.Client(timeout=30.0) as client:
-            response = client.get(url, params=params)
-            response.raise_for_status()
-            return response.json()
-    except httpx.HTTPError as e:
-        print(f"Error fetching company overview: {e}")
-        return None
+    """Load company overview."""
+    return fetch_company_profile(ticker)
 
 
 def analyze_with_ai(
-    # Finnhub data
+    # Data arguments
     calendar_data: dict, 
     surprise_data: dict, 
     profile_data: dict,
     financials_data: dict,
-    # Alpha Vantage data
     av_earnings: dict = None,
     av_income: dict = None,
     av_balance: dict = None,
     av_cashflow: dict = None,
     av_overview: dict = None,
+    # Graph Context
+    graph_context: str = None,
     user_query: str = None
 ) -> str:
     """Send comprehensive company data to Azure OpenAI for analysis."""
     
-    # Format Finnhub data
-    calendar_text = json.dumps(calendar_data, indent=2) if calendar_data else "No calendar data available"
-    surprise_text = json.dumps(surprise_data, indent=2) if surprise_data else "No surprise data available"
-    profile_text = json.dumps(profile_data, indent=2) if profile_data else "No profile data available"
-    financials_text = json.dumps(financials_data, indent=2) if financials_data else "No financials data available"
+    # Helper to safe-serialize
+    def safe_json(data, name):
+        if not data: return f"No {name} data available"
+        # Truncate large lists to avoid token limits
+        if isinstance(data, list) and len(data) > 10:
+            return json.dumps(data[:10], indent=2) + f"\n... ({len(data)-10} more records)"
+        if isinstance(data, dict):
+            # Check for inner lists
+            for k, v in data.items():
+                if isinstance(v, list) and len(v) > 10:
+                    data = data.copy()
+                    data[k] = v[:10]
+        return json.dumps(data, indent=2)
+
+    # Format data strings
+    profile_text = safe_json(profile_data, "profile")
+    financials_text = safe_json(financials_data, "financials")
+    calendar_text = safe_json(calendar_data, "calendar")
+    surprise_text = safe_json(surprise_data, "surprise")
     
-    # Format Alpha Vantage data
-    av_earnings_text = json.dumps(av_earnings, indent=2) if av_earnings else "No extended earnings data available"
-    av_income_text = json.dumps(av_income, indent=2) if av_income else "No income statement available"
-    av_balance_text = json.dumps(av_balance, indent=2) if av_balance else "No balance sheet available"
-    av_cashflow_text = json.dumps(av_cashflow, indent=2) if av_cashflow else "No cash flow statement available"
-    av_overview_text = json.dumps(av_overview, indent=2) if av_overview else "No overview available"
+    av_earnings_text = safe_json(av_earnings, "earnings")
+    av_income_text = safe_json(av_income, "income")
+    av_balance_text = safe_json(av_balance, "balance sheet")
+    av_cashflow_text = safe_json(av_cashflow, "cash flow")
+    av_overview_text = safe_json(av_overview, "overview")
     
     # Build the prompt
-    system_prompt = """You are an expert financial analyst assistant. Analyze the provided comprehensive company data including:
+    system_prompt = """You are an expert financial analyst assistant utilizing a Context-Enriched Agentic RAG system.
+    You have access to:
+    1. Comprehensive Financial Data (Fundamentals, Financial Statements, Earnings).
+    2. A Causal-Temporal Knowledge Graph (Neo4j) containing historical reasoning extracted from earnings calls.
     
-    **Company Information:**
-    - Company profile (industry, sector, market cap, description)
-    - Detailed overview and fundamentals
+    Analyze the provided data. **CRITICALLY: Connect current performance to historical context provided in the Knowledge Graph section.**
+    If the KG shows a recurring reason for missed earnings (e.g. "supply chain issues" appearing in Q1 and Q2), highlight this pattern.
     
-    **Financial Statements:**
-    - Income statement (revenue, expenses, net income trends)
-    - Balance sheet (assets, liabilities, equity)
-    - Cash flow statement (operating, investing, financing activities)
+    Structure your response as an Institutional Investment Memo.
     
-    **Performance Metrics:**
-    - Financial ratios (P/E, P/B, PEG, ROE, ROA, margins, debt ratios)
-    - Earnings calendar and estimates
-    - Extended earnings history (multiple quarters/years)
-    - Earnings surprises and beat/miss patterns
+    NOTE: Data is provided in JSON format. 'None' or 'null' indicates missing data."""
     
-    Provide comprehensive analysis including:
-    - Executive summary and investment thesis
-    - Company overview and business model
-    - Valuation assessment (compare to industry, historical trends)
-    - Profitability analysis (margins, returns, efficiency)
-    - Financial health (liquidity, solvency, debt management)
-    - Revenue and earnings growth trajectory
-    - Cash flow quality and trends
-    - Beat/miss patterns and earnings consistency
-    - Risks and opportunities
-    - Conclusion and investment recommendation"""
+    user_prompt = f"""
+    Please analyze {profile_data.get('Symbol', profile_data.get('ticker', 'the company'))} based on the following:
     
-    user_prompt = f"""Here is the complete company data:
+    === CAUSAL-TEMPORAL KNOWLEDGE GRAPH (HISTORICAL CONTEXT) ===
+    {graph_context if graph_context else "No historical graph context available."}
+    ============================================================
 
-**FINNHUB DATA**
-
-**Company Profile:**
-{profile_text}
-
-**Financial Metrics & Ratios:**
-{financials_text}
-
-**Earnings Calendar:**
-{calendar_text}
-
-**Earnings Surprise (1 year):**
-{surprise_text}
-
----
-
-**ALPHA VANTAGE DATA**
-
-**Company Overview:**
-{av_overview_text}
-
-**Extended Earnings History:**
-{av_earnings_text}
-
-**Income Statement (Annual & Quarterly):**
-{av_income_text}
-
-**Balance Sheet (Annual & Quarterly):**
-{av_balance_text}
-
-**Cash Flow Statement (Annual & Quarterly):**
-{av_cashflow_text}
-
-"""
+    === FINANCIAL DATA ===
+    
+    **Company Profile & Overview:**
+    {profile_text}
+    
+    **Key Financial Metrics:**
+    {financials_text}
+    
+    **Income Statement (Recent):**
+    {av_income_text}
+    
+    **Balance Sheet (Recent):**
+    {av_balance_text}
+    
+    **Cash Flow (Recent):**
+    {av_cashflow_text}
+    
+    **Earnings History & Surprises:**
+    {av_earnings_text}
+    {surprise_text}
+    """
     
     if user_query:
         user_prompt += f"\n**User Question:** {user_query}"
-    else:
-        user_prompt += "\n**Task:** Please provide a comprehensive fundamental and earnings analysis of this company with an investment thesis."
     
     try:
         response = azure_client.chat.completions.create(
-    model=os.getenv("AZURE_DEPLOYMENT"),
+            model=os.getenv("AZURE_DEPLOYMENT"),
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
@@ -311,133 +212,172 @@ def analyze_with_ai(
         print(f"Error calling Azure OpenAI: {e}")
         return None
 
+# ============================================================================
+# GRAPH RAG & TRANSCRIPT PROCESSING
+# ============================================================================
+
+def process_transcripts_for_graph(ticker: str):
+    """
+    Look for local transcript files, extract facts using LLM, and ingest into Neo4j.
+    """
+    print(f"\n🧠 Graph Agent: Processing local earnings transcripts for {ticker}...")
+    
+    if not graph_db:
+        print("   ⚠️ Graph DB not available. Skipping.")
+        return
+
+    # Find text files in data dir matching pattern
+    # Pattern: data/{TICKER}_earnings_transcript_{YEAR}_{QUARTER}.txt
+    # or lowercase
+    pattern = os.path.join(DATA_DIR, f"{ticker.upper()}_earnings_transcript_*.txt")
+    files = glob.glob(pattern)
+    
+    if not files:
+        # Try lowercase
+        pattern = os.path.join(DATA_DIR, f"{ticker.lower()}_earnings_transcript_*.txt")
+        files = glob.glob(pattern)
+        
+    if not files:
+        print("   ⚠️ No transcript files found in data/ directory.")
+        return
+        
+    print(f"   Found {len(files)} transcript(s). processing recent 2...")
+    
+    # Sort files to get most recent (by filename usually works if YYYY_Q works)
+    files.sort(reverse=True)
+    
+    # Process only top 2 to save time/tokens
+    for filename in files[:2]: 
+        print(f"   📖 Reading {os.path.basename(filename)}...")
+        
+        # Extract Quarter from filename
+        # Expected format: TICKER_earnings_transcript_YYYY_QQ.txt
+        try:
+            parts = os.path.basename(filename).replace(".txt", "").split("_")
+            # Usually: NVDA_earnings_transcript_2026_Q2.txt -> ["NVDA", "earnings", "transcript", "2026", "Q2"]
+            year = parts[-2]
+            quarter = parts[-1] 
+            quarter_id = f"{year}-{quarter}"
+        except:
+            quarter_id = "UNKNOWN"
+            
+        try:
+            with open(filename, 'r', encoding='utf-8') as f:
+                text = f.read()
+        except Exception as e:
+            print(f"   ❌ Error reading file: {e}")
+            continue
+            
+        if len(text) < 100:
+            print("   ⚠️ File empty or too short.")
+            continue
+            
+        # Extract Facts
+        print(f"   🤖 Extracting Causal Facts from {quarter_id}...")
+        facts = extract_facts_with_llm(ticker, quarter_id, text[:15000]) # Limit tokens
+        
+        # Ingest
+        if facts:
+            print(f"   💾 Ingesting {len(facts)} facts to Neo4j...")
+            for fact in facts:
+                graph_db.ingest_financial_fact(
+                    ticker=ticker,
+                    quarter=quarter_id,
+                    metric=fact.get("metric"),
+                    value=fact.get("value"),
+                    unit=fact.get("unit", "USD")
+                )
+                if fact.get("reason"):
+                    graph_db.ingest_transcript_reason(
+                        ticker=ticker,
+                        quarter=quarter_id,
+                        metric=fact.get("metric"),
+                        reason_text=fact.get("reason"),
+                        sentiment=fact.get("sentiment", "NEUTRAL")
+                    )
+    print("   ✅ Graph update complete.")
+
+
+def extract_facts_with_llm(ticker: str, quarter: str, transcript_text: str) -> list:
+    """
+    Use Azure OpenAI to extract structured facts and causal reasons.
+    """
+    system_prompt = """You are a financial analyst agent.
+    Extract key financial metrics and the *specific reason* provided by management.
+    Return JSON: {"facts": [{"metric": "...", "value": "...", "reason": "..."}]}
+    """
+    
+    user_prompt = f"""
+    Ticker: {ticker}
+    Quarter: {quarter}
+    TRANSCRIPT EXCERPT:
+    {transcript_text[:10000]} 
+    """
+    # Truncated context for speed
+    
+    try:
+        response = azure_client.chat.completions.create(
+            model=os.getenv("AZURE_DEPLOYMENT"),
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.0,
+            response_format={ "type": "json_object" }
+        )
+        content = response.choices[0].message.content
+        data = json.loads(content)
+        return data.get("facts", [])
+    except Exception as e:
+        print(f"Error extracting facts: {e}")
+        return []
+
 
 def rag_pipeline(ticker: str, user_query: str = None):
-    """Main RAG pipeline to fetch and analyze company data from Finnhub and Alpha Vantage."""
-    print(f"\n🔍 Fetching comprehensive data for {ticker.upper()}...")
+    """Main RAG pipeline."""
+    print(f"\n🔍 Analyzing {ticker.upper()} using LOCAL DATA...")
     print("=" * 80)
     
-    # ========== FINNHUB DATA ==========
-    print("\n📊 FINNHUB DATA (4 API calls)")
-    print("-" * 80)
-    
-    # Step 1: Fetch company profile
-    print("  🏢 Fetching company profile...")
+    # Fetch DataLocally
+    print("  📂 Loading local files...")
     profile_data = fetch_company_profile(ticker)
-    
-    # Step 2: Fetch basic financials
-    print("  💰 Fetching financial metrics...")
     financials_data = fetch_basic_financials(ticker)
-    
-    # Step 3: Fetch earnings calendar
-    print("  📅 Fetching earnings calendar...")
     calendar_data = fetch_earnings_calendar(ticker)
-    
-    # Step 4: Fetch earnings surprise history
-    print("  📊 Fetching earnings surprise history...")
     surprise_data = fetch_earnings_surprise(ticker)
     
-    # ========== ALPHA VANTAGE DATA ==========
-    print("\n📈 ALPHA VANTAGE DATA (5 API calls - Free tier: 25/day limit)")
-    print("-" * 80)
-    
-    # Step 5: Fetch Alpha Vantage company overview
-    print("  🏢 Fetching company overview...")
     av_overview = fetch_av_overview(ticker)
-    
-    # Step 6: Fetch Alpha Vantage extended earnings
-    print("  📊 Fetching extended earnings history...")
     av_earnings = fetch_av_earnings(ticker)
-    
-    # Step 7: Fetch income statement
-    print("  💵 Fetching income statement...")
     av_income = fetch_av_income_statement(ticker)
-    
-    # Step 8: Fetch balance sheet
-    print("  📋 Fetching balance sheet...")
     av_balance = fetch_av_balance_sheet(ticker)
-    
-    # Step 9: Fetch cash flow statement
-    print("  💸 Fetching cash flow statement...")
     av_cashflow = fetch_av_cash_flow(ticker)
     
-    # Check if we have at least some data
-    has_data = any([
-        profile_data, financials_data, calendar_data, surprise_data,
-        av_overview, av_earnings, av_income, av_balance, av_cashflow
-    ])
-    
-    if not has_data:
-        print("\n❌ No data found or error occurred.")
+    if not profile_data and not av_overview:
+        print("\n❌ No local data found. Please run data collection script first.")
         return
+
+    # Graph
+    print("\n🕸️  NEO4J GRAPH AGENT (Context Enrichment)")
+    print("-" * 80)
+    if profile_data and graph_db:
+        graph_db.ingest_company_profile(profile_data)
+        
+    process_transcripts_for_graph(ticker)
     
-    # ========== DATA SUMMARY ==========
-    print("\n" + "=" * 80)
-    print("📦 DATA SUMMARY")
-    print("=" * 80)
-    
-    print("\n🔹 FINNHUB:")
-    if profile_data and profile_data.get("name"):
-        print(f"  ✅ Company: {profile_data.get('name')} ({profile_data.get('ticker')})")
-        print(f"     Industry: {profile_data.get('finnhubIndustry', 'N/A')}")
-    else:
-        print("  ⚠️  No company profile")
-    
-    if financials_data and financials_data.get("metric"):
-        metrics = financials_data.get("metric", {})
-        print(f"  ✅ Financial metrics: {len(metrics)} ratios")
-    else:
-        print("  ⚠️  No financial metrics")
-    
-    if calendar_data and calendar_data.get("earningsCalendar"):
-        print(f"  ✅ Earnings calendar: {len(calendar_data['earningsCalendar'])} entries")
-    else:
-        print("  ⚠️  No calendar data")
-    
-    if surprise_data:
-        print(f"  ✅ Earnings surprise: {len(surprise_data)} records (1 year)")
-    else:
-        print("  ⚠️  No surprise data")
-    
-    print("\n🔹 ALPHA VANTAGE:")
-    if av_overview and av_overview.get("Name"):
-        print(f"  ✅ Company overview: {av_overview.get('Name')}")
-        print(f"     Sector: {av_overview.get('Sector', 'N/A')} | Industry: {av_overview.get('Industry', 'N/A')}")
-    else:
-        print("  ⚠️  No company overview")
-    
-    if av_earnings and av_earnings.get("quarterlyEarnings"):
-        print(f"  ✅ Extended earnings: {len(av_earnings.get('quarterlyEarnings', []))} quarters")
-    else:
-        print("  ⚠️  No extended earnings")
-    
-    if av_income and av_income.get("quarterlyReports"):
-        print(f"  ✅ Income statement: {len(av_income.get('quarterlyReports', []))} quarters")
-    else:
-        print("  ⚠️  No income statement")
-    
-    if av_balance and av_balance.get("quarterlyReports"):
-        print(f"  ✅ Balance sheet: {len(av_balance.get('quarterlyReports', []))} quarters")
-    else:
-        print("  ⚠️  No balance sheet")
-    
-    if av_cashflow and av_cashflow.get("quarterlyReports"):
-        print(f"  ✅ Cash flow: {len(av_cashflow.get('quarterlyReports', []))} quarters")
-    else:
-        print("  ⚠️  No cash flow")
-    
-    # ========== AI ANALYSIS ==========
+    graph_context = ""
+    if graph_db:
+        print("  🧠 Retrieving Causal-Temporal Context from Graph...")
+        graph_context = graph_db.retrieve_all_context(ticker)
+        print(f"  ✅ Context loaded ({len(graph_context)} chars)")
+
+    # Analysis
     print("\n" + "=" * 80)
     print("🤖 ANALYZING WITH AI...")
     print("=" * 80)
     
     analysis = analyze_with_ai(
-        # Finnhub data
         calendar_data, surprise_data, profile_data, financials_data,
-        # Alpha Vantage data
         av_earnings, av_income, av_balance, av_cashflow, av_overview,
-        # User query
-        user_query
+        graph_context, user_query
     )
     
     if analysis:
@@ -453,30 +393,13 @@ def rag_pipeline(ticker: str, user_query: str = None):
 def main():
     """Main entry point."""
     print("="*80)
-    print("📊 INSTITUTIONAL-GRADE STOCK ANALYSIS RAG PIPELINE")
+    print("📊 CONTEXT-ENRICHED AGENTIC RAG PIPELINE")
     print("="*80)
-    print("Powered by: Finnhub + Alpha Vantage + Azure OpenAI")
-    print("\n🔹 Data Sources (9 FREE API endpoints):")
-    print("\n  FINNHUB (4 endpoints):")
-    print("    • Company Profile & Metrics")
-    print("    • Financial Ratios (50+ metrics)")
-    print("    • Earnings Calendar")
-    print("    • Earnings Surprise (1 year)")
-    print("\n  ALPHA VANTAGE (5 endpoints):")
-    print("    • Company Overview & Fundamentals")
-    print("    • Extended Earnings History (All quarters)")
-    print("    • Income Statement (Annual & Quarterly)")
-    print("    • Balance Sheet (Annual & Quarterly)")
-    print("    • Cash Flow Statement (Annual & Quarterly)")
-    print("\n⚠️  Note: Alpha Vantage free tier has 25 API calls/day limit")
-    print("💡 Tip: You can analyze 2-3 companies per day on free tier")
+    print("Powered by: Finnhub + Alpha Vantage + Neo4j + Azure OpenAI")
     
     # Get ticker from user
-    ticker = input("\nEnter stock ticker symbol: ").strip()
-    
-    if not ticker:
-        print("No ticker provided. Exiting.")
-        return
+    ticker = "NVDA"
+    print(f"\n🚀 Analyzing: {ticker}")
     
     # Optional: Get specific question from user
     print("\nEnter a specific question (or press Enter for comprehensive analysis):")
@@ -487,6 +410,10 @@ def main():
     
     # Run the RAG pipeline
     rag_pipeline(ticker, user_query)
+    
+    # Close Graph Connection
+    if graph_db:
+        graph_db.close()
 
 
 if __name__ == "__main__":

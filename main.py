@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+import numpy as np
 from dotenv import load_dotenv
 from openai import AzureOpenAI
 import json
@@ -60,32 +61,230 @@ def fetch_financial_metrics(ticker: str) -> dict:
         "surprise": surprise if surprise else []
     }
 
+def fetch_stock_price_history(ticker: str) -> pd.DataFrame:
+    """
+    Load stock price history for technical analysis.
+    Tries daily data first, then weekly if daily not available.
+    """
+    # Try daily data (5 years)
+    filename = os.path.join(DATA_DIR, f"{ticker.upper()}_daily_stock_data_5y.csv")
+    if not os.path.exists(filename):
+        filename = os.path.join(DATA_DIR, f"{ticker.lower()}_daily_stock_data_5y.csv")
+    
+    if os.path.exists(filename):
+        try:
+            df = pd.read_csv(filename)
+            # Sort by date to ensure chronological order
+            if 'timestamp' in df.columns:
+                df = df.sort_values('timestamp')
+            elif 'date' in df.columns:
+                df = df.sort_values('date')
+            return df
+        except Exception as e:
+            print(f"   ⚠️ Error loading daily data: {e}")
+    
+    # Fallback to weekly data
+    filename = os.path.join(DATA_DIR, f"{ticker.upper()}_weekly_stock_data.csv")
+    if not os.path.exists(filename):
+        filename = os.path.join(DATA_DIR, f"{ticker.lower()}_weekly_stock_data.csv")
+    
+    if os.path.exists(filename):
+        try:
+            df = pd.read_csv(filename)
+            if 'timestamp' in df.columns:
+                df = df.sort_values('timestamp')
+            elif 'date' in df.columns:
+                df = df.sort_values('date')
+            return df
+        except Exception as e:
+            print(f"   ⚠️ Error loading weekly data: {e}")
+    
+    return None
+
+def get_economic_data_for_quarter(quarter_id: str) -> dict:
+    """
+    Load economic indicators for a specific quarter.
+    quarter_id format: "2025-Q4"
+    """
+    year, quarter = quarter_id.split("-")
+    year = int(year)
+    quarter_num = int(quarter[1])
+    
+    # Calculate approximate date range for the quarter
+    quarter_months = {
+        1: (1, 3),   # Q1: Jan-Mar
+        2: (4, 6),   # Q2: Apr-Jun  
+        3: (7, 9),   # Q3: Jul-Sep
+        4: (10, 12)  # Q4: Oct-Dec
+    }
+    start_month, end_month = quarter_months[quarter_num]
+    
+    # Load economic data files
+    economic_data = {}
+    
+    try:
+        # CPI
+        cpi_df = pd.read_csv(os.path.join(DATA_DIR, "economic_cpi.csv"))
+        cpi_df['date'] = pd.to_datetime(cpi_df['date'], errors='coerce')
+        # Convert value column to numeric, coercing errors to NaN
+        cpi_df['value'] = pd.to_numeric(cpi_df['value'], errors='coerce')
+        cpi_value = cpi_df[
+            (cpi_df['date'].dt.year == year) & 
+            (cpi_df['date'].dt.month >= start_month) & 
+            (cpi_df['date'].dt.month <= end_month)
+        ]['value'].mean()
+        economic_data['cpi'] = float(cpi_value) if not pd.isna(cpi_value) else None
+        
+        # Inflation
+        inflation_df = pd.read_csv(os.path.join(DATA_DIR, "economic_inflation.csv"))
+        inflation_df['date'] = pd.to_datetime(inflation_df['date'], errors='coerce')
+        inflation_df['value'] = pd.to_numeric(inflation_df['value'], errors='coerce')
+        inflation_value = inflation_df[inflation_df['date'].dt.year == year]['value'].mean()
+        economic_data['inflation'] = float(inflation_value) if not pd.isna(inflation_value) else None
+        
+        # Unemployment
+        unemployment_df = pd.read_csv(os.path.join(DATA_DIR, "economic_unemployment.csv"))
+        unemployment_df['date'] = pd.to_datetime(unemployment_df['date'], errors='coerce')
+        unemployment_df['value'] = pd.to_numeric(unemployment_df['value'], errors='coerce')
+        unemployment_value = unemployment_df[
+            (unemployment_df['date'].dt.year == year) & 
+            (unemployment_df['date'].dt.month >= start_month) & 
+            (unemployment_df['date'].dt.month <= end_month)
+        ]['value'].mean()
+        economic_data['unemployment'] = float(unemployment_value) if not pd.isna(unemployment_value) else None
+        
+        # GDP (annual data)
+        gdp_df = pd.read_csv(os.path.join(DATA_DIR, "economic_real_gdp.csv"))
+        gdp_df['date'] = pd.to_datetime(gdp_df['date'], errors='coerce')
+        gdp_df['value'] = pd.to_numeric(gdp_df['value'], errors='coerce')
+        gdp_value = gdp_df[gdp_df['date'].dt.year == year]['value'].mean()
+        economic_data['gdp'] = float(gdp_value) if not pd.isna(gdp_value) else None
+        
+        # Federal Funds Rate
+        fed_df = pd.read_csv(os.path.join(DATA_DIR, "economic_federal_funds_rate.csv"))
+        fed_df['date'] = pd.to_datetime(fed_df['date'], errors='coerce')
+        fed_df['value'] = pd.to_numeric(fed_df['value'], errors='coerce')
+        fed_value = fed_df[
+            (fed_df['date'].dt.year == year) & 
+            (fed_df['date'].dt.month >= start_month) & 
+            (fed_df['date'].dt.month <= end_month)
+        ]['value'].mean()
+        economic_data['federal_funds_rate'] = float(fed_value) if not pd.isna(fed_value) else None
+        
+        # Treasury Yield
+        treasury_df = pd.read_csv(os.path.join(DATA_DIR, "economic_treasury_yield_10y.csv"))
+        treasury_df['date'] = pd.to_datetime(treasury_df['date'], errors='coerce')
+        treasury_df['value'] = pd.to_numeric(treasury_df['value'], errors='coerce')
+        treasury_value = treasury_df[
+            (treasury_df['date'].dt.year == year) & 
+            (treasury_df['date'].dt.month >= start_month) & 
+            (treasury_df['date'].dt.month <= end_month)
+        ]['value'].mean()
+        economic_data['treasury_yield'] = float(treasury_value) if not pd.isna(treasury_value) else None
+        
+    except Exception as e:
+        print(f"   ⚠️ Error loading economic data for {quarter_id}: {e}")
+    
+    return economic_data
+
+def load_earnings_transcript(ticker: str, quarter_id: str) -> str:
+    """
+    Load earnings transcript for a specific quarter.
+    """
+    year, quarter = quarter_id.split("-")
+    
+    # Try different filename formats
+    patterns = [
+        f"{ticker.upper()}_earnings_transcript_{year}_{quarter}.txt",
+        f"{ticker.lower()}_earnings_transcript_{year}_{quarter}.txt"
+    ]
+    
+    for pattern in patterns:
+        filename = os.path.join(DATA_DIR, pattern)
+        if os.path.exists(filename):
+            try:
+                with open(filename, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    if len(content) > 100:
+                        return content
+            except Exception as e:
+                print(f"   ⚠️ Error reading transcript: {e}")
+    
+    return ""
+
+def build_comprehensive_context(ticker: str, quarter_id: str, 
+                                financial_metrics: dict) -> str:
+    """
+    Build comprehensive context including:
+    - Economic indicators
+    - Earnings transcript
+    - Financial metrics
+    """
+    # Get economic data
+    economic_data = get_economic_data_for_quarter(quarter_id)
+    
+    # Get transcript
+    transcript = load_earnings_transcript(ticker, quarter_id)
+    
+    # Build context string
+    context = f"""
+=== QUARTERLY CONTEXT FOR {ticker} {quarter_id} ===
+
+## MACROECONOMIC INDICATORS
+- CPI (Consumer Price Index): {economic_data.get('cpi', 'N/A')}
+- Inflation Rate: {economic_data.get('inflation', 'N/A')}%
+- Unemployment Rate: {economic_data.get('unemployment', 'N/A')}%
+- Real GDP: {economic_data.get('gdp', 'N/A')}
+- Federal Funds Rate: {economic_data.get('federal_funds_rate', 'N/A')}%
+- 10Y Treasury Yield: {economic_data.get('treasury_yield', 'N/A')}%
+
+## FINANCIAL METRICS
+"""
+    
+    # Add financial metrics
+    if financial_metrics:
+        fin_data = financial_metrics.get('financials', {}).get('metric', {})
+        for key, value in list(fin_data.items())[:10]:  # Limit to key metrics
+            context += f"- {key}: {value}\n"
+    
+    context += f"\n## EARNINGS TRANSCRIPT\n{transcript[:15000]}\n"
+    
+    return context, economic_data, transcript
+
 # ============================================================================
 # SIGNAL GENERATION & ANALYSIS
 # ============================================================================
 
 
-def generate_strategic_summary(transcript_text: str, graph_context: str) -> str:
+def generate_llm_analysis(comprehensive_context: str, graph_context: str) -> str:
     """
-    Generate a high-density strategic summary for vectorization,
-    Enriched by Neo4j Historical Context.
+    Generate LLM analysis from comprehensive quarterly context.
+    This is the core of the Context Enriched Agentic RAG approach.
     """
-    system_prompt = """You are a Strategic Signal Compressor.
-    Summarize the transcript in strict 50 words.
-    
-    CRITICAL: Incorporate the 'Historical Context' provided.
-    If the current transcript mentions an issue (e.g. Supply Chain) that also appeared in the History, emphasize it as a RECURRING pattern.
-    
-    Focus ONLY on: Growth Drivers, Macro Headwinds, and Demand durability."""
+    system_prompt = """You are an Expert Investment Analyst with access to comprehensive quarterly data.
+
+Analyze the provided context which includes:
+- Macroeconomic indicators (CPI, inflation, unemployment, GDP, interest rates)
+- Earnings transcript with management commentary
+- Financial metrics and fundamentals
+
+Provide a strategic analysis (200-300 words) covering:
+1. Revenue and Growth Trajectory
+2. Macro Environment Impact (how economic conditions affect the company)
+3. Key Business Drivers and Catalysts
+4. Risk Factors and Headwinds
+5. Forward-Looking Sentiment
+
+CRITICAL: If historical context is provided, identify RECURRING patterns and trends."""
     
     user_prompt = f"""
-    === HISTORICAL CONTEXT (NEO4J) ===
-    {graph_context[:2000] if graph_context else "No history available."}
-    ==================================
-    
-    === CURRENT TRANSCRIPT ===
-    {transcript_text[:10000]}
-    """
+=== HISTORICAL CONTEXT (PREVIOUS QUARTERS) ===
+{graph_context[:3000] if graph_context else "No historical data available."}
+=========================================
+
+{comprehensive_context}
+
+Provide your strategic analysis:"""
     
     try:
         response = azure_client.chat.completions.create(
@@ -94,77 +293,115 @@ def generate_strategic_summary(transcript_text: str, graph_context: str) -> str:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            temperature=0.0
+            temperature=0.3,
         )
         return response.choices[0].message.content
     except Exception as e:
-        print(f"Error generating summary: {e}")
+        print(f"   ❌ Error generating LLM analysis: {e}")
         return ""
 
-def process_transcripts_and_get_summaries(ticker: str) -> list:
+def process_quarterly_context_and_generate_analysis(ticker: str, num_quarters: int = 3) -> tuple:
     """
-    Process transcripts to get Strategic Summaries.
-    CHECK NEO4J FIRST. If missing, generate (with context) and Store.
-    """
-    print(f"\n🧠 Processing Transcripts for Signal Generation...")
+    Context Enriched Agentic RAG Pipeline:
+    1. Build comprehensive context (economic + transcript + financial data)
+    2. Feed to LLM for analysis
+    3. Vectorize LLM output (embeddings)
+    4. Store in Neo4j
+    5. Return analyses, embeddings, and vectorizer for RL agent
     
-    # Pattern matching
+    Returns: (results_list, vectorizer_instance)
+    """
+    print(f"\n🧠 Context Enriched RAG: Processing Quarterly Data...")
+    
+    # Initialize vectorizer once for all quarters
+    print(f"   🔢 Initializing vectorizer...")
+    vectorizer = NarrativeVectorizer(model_name='all-MiniLM-L6-v2')
+    
+    # Find available transcripts
     pattern = os.path.join(DATA_DIR, f"{ticker.upper()}_earnings_transcript_*.txt")
     files = glob.glob(pattern)
-    if not files: # try lower
+    if not files:
         pattern = os.path.join(DATA_DIR, f"{ticker.lower()}_earnings_transcript_*.txt")
         files = glob.glob(pattern)
         
     if not files:
         print("   ⚠️ No transcripts found.")
-        return []
+        return [], vectorizer
         
-    files.sort(reverse=True) # Newest first
-    summaries = []
+    files.sort(reverse=True)  # Newest first
+    results = []
     
-    # We process the top 3-4 to build enough context for the vectorizer
-    # In a real app, this would be cached.
-    for filename in files[:4]:
+    for filename in files[:num_quarters]:
         try:
-            # Extract Quarter info
+            # Extract quarter ID
             parts = os.path.basename(filename).replace(".txt", "").split("_")
             year, quarter = parts[-2], parts[-1]
             quarter_id = f"{year}-{quarter}"
             
-            # 1. CHECK GRAPH CACHE
+            print(f"\n   📊 Processing Quarter: {quarter_id}")
+            
+            # 1. CHECK NEO4J CACHE
             if graph_db:
-                cached_summary = graph_db.retrieve_quarterly_summary(ticker, quarter_id)
-                if cached_summary:
-                    print(f"   ✅ [Graph Cache] Found summary for {quarter_id}")
-                    summaries.append(cached_summary)
+                cached_data = graph_db.retrieve_quarterly_summary(ticker, quarter_id)
+                if cached_data and cached_data.get('embedding'):
+                    print(f"   ✅ [Cache Hit] Using stored analysis for {quarter_id}")
+                    results.append({
+                        'quarter_id': quarter_id,
+                        'analysis': cached_data['text'],
+                        'embedding': np.array(cached_data['embedding'])
+                    })
                     continue
-
-            # 2. GENERATE NEW (Enriched)
-            print(f"   ⚙️  Generative New Summary for {quarter_id}...")
             
-            with open(filename, 'r', encoding='utf-8') as f:
-                text = f.read()
-            if len(text) < 100: continue
+            # 2. BUILD COMPREHENSIVE CONTEXT
+            print(f"   📦 Building comprehensive context...")
+            metrics = fetch_financial_metrics(ticker)
+            context, economic_data, transcript = build_comprehensive_context(
+                ticker, quarter_id, metrics
+            )
             
-            # Retrieve Context (What happened BEFORE this quarter?)
-            # Ideally we'd filter context to be strictly < current date, but for now we take general history
-            context = ""
+            # Store raw context in Neo4j first
+            if graph_db and len(transcript) > 100:
+                graph_db.ingest_quarterly_context(
+                    ticker, quarter_id, transcript, 
+                    economic_data, metrics
+                )
+            
+            # 3. GET HISTORICAL CONTEXT FROM GRAPH
+            historical_context = ""
             if graph_db:
-                context = graph_db.retrieve_all_context(ticker)
-
-            # Generate Summary
-            summary = generate_strategic_summary(text, context)
+                historical_context = graph_db.retrieve_all_context(ticker)
             
-            if summary:
-                summaries.append(summary)
-                # 3. STORE IN GRAPH
-                if graph_db:
-                    graph_db.ingest_quarterly_summary(ticker, quarter_id, summary)
+            # 4. GENERATE LLM ANALYSIS
+            print(f"   🤖 Generating LLM analysis...")
+            llm_analysis = generate_llm_analysis(context, historical_context)
+            
+            if not llm_analysis:
+                print(f"   ⚠️ Failed to generate analysis for {quarter_id}")
+                continue
+            
+            # 5. VECTORIZE LLM OUTPUT (this is the key!)
+            print(f"   🔢 Vectorizing LLM output...")
+            embedding = vectorizer.get_embedding(llm_analysis)
+            
+            # 6. STORE IN NEO4J
+            if graph_db:
+                graph_db.ingest_quarterly_summary(
+                    ticker, quarter_id, llm_analysis, 
+                    embedding.tolist()
+                )
+            
+            results.append({
+                'quarter_id': quarter_id,
+                'analysis': llm_analysis,
+                'embedding': embedding
+            })
+            
+            print(f"   ✅ Completed {quarter_id}")
             
         except Exception as e:
-            print(f"   Error reading {filename}: {e}")
-            
-    return summaries
+            print(f"   ❌ Error processing {filename}: {e}")
+    
+    return results, vectorizer
 
 
 def analyze_with_ai(profile, metrics, signal_data, user_query):
@@ -208,14 +445,14 @@ def analyze_with_ai(profile, metrics, signal_data, user_query):
 
 def main():
     print("="*80)
-    print("🤖 INTELLISENSE: QUANTITATIVE SIGNAL AGENT")
+    print("🤖 INTELLISENSE: CONTEXT ENRICHED AGENTIC RAG SYSTEM")
     print("="*80)
     
     ticker = "NVDA"
     print(f"🚀 Target: {ticker}")
     
     # 1. Load Financials
-    print("   📂 Loading Financial Data...")
+    print("\n📂 Loading Financial Data...")
     profile = fetch_company_profile(ticker)
     metrics = fetch_financial_metrics(ticker)
     
@@ -223,38 +460,94 @@ def main():
         print("   ❌ Data not found.")
         return
 
-    # 2. Vectorization Pipeline
-    vectorizer = NarrativeVectorizer()
-    rl_agent = MarkovRLAgent()
-    
-    summaries = process_transcripts_and_get_summaries(ticker)
-    
-    if summaries:
-        print(f"   📊 Vectorizing {len(summaries)} Historical Narratives...")
-        vectorizer.fit(summaries)
-        
-        # Current State
-        current_summary = summaries[0] # Most recent
-        narrative_state = vectorizer.get_narrative_state(current_summary)
-        print(f"   🧩 Detected Narrative State: {narrative_state}")
-        
-        # 3. RL Signal
-        print("   🧠 Markov Agent Evaluating Policy...")
-        signal = rl_agent.get_signal(narrative_state, metrics)
-        
-        print("\n" + "="*40)
-        print(f"📢 FINAL SIGNAL: {signal['action']}")
-        print(f"   Confidence: {signal['confidence']:.2f}")
-        print(f"   Rationale: {signal['rationale']}")
-        print("="*40 + "\n")
-        
-        # 4. Final Memo
-        memo = analyze_with_ai(profile, metrics, signal, None)
-        print("📝 INVESTMENT MEMO:")
-        print(memo)
-        
+    # 2. Load Stock Price History
+    print("\n📈 Loading Stock Price History...")
+    price_history = fetch_stock_price_history(ticker)
+    if price_history is not None:
+        print(f"   ✅ Loaded {len(price_history)} data points")
     else:
-        print("❌ Could not generate signal (missing transcripts).")
+        print("   ⚠️ No price history found, proceeding without technical indicators")
+
+    # 3. CONTEXT ENRICHED RAG PIPELINE
+    print("\n" + "="*80)
+    print("🔄 CONTEXT ENRICHED AGENTIC RAG PIPELINE")
+    print("="*80)
+    
+    # Process quarterly contexts -> LLM analysis -> Vectorization
+    quarterly_results, vectorizer = process_quarterly_context_and_generate_analysis(ticker, num_quarters=3)
+    
+    if not quarterly_results:
+        print("❌ Could not process quarterly data.")
+        return
+    
+    # Get most recent analysis
+    current_result = quarterly_results[0]
+    current_embedding = current_result['embedding']
+    current_analysis = current_result['analysis']
+    
+    print(f"\n📊 LLM Analysis Summary (Most Recent Quarter):")
+    print("="*80)
+    print(current_analysis[:500] + "...")
+    print("="*80)
+    
+    # 4. Initialize RL Agent (vectorizer already created and returned)
+    embedding_dim = len(current_embedding)
+    print(f"\n🔢 Embedding Dimension: {embedding_dim}")
+    
+    rl_agent = MarkovRLAgent(narrative_dim=embedding_dim)
+    
+    # Fit vectorizer on historical embeddings
+    if len(quarterly_results) >= 3:
+        historical_analyses = [r['analysis'] for r in quarterly_results]
+        historical_embeddings = [r['embedding'] for r in quarterly_results]
+        vectorizer.fit(historical_analyses, historical_embeddings)
+    
+    # Get narrative state from embedding
+    narrative_state = vectorizer.get_narrative_state(
+        text=current_analysis, 
+        embedding=current_embedding
+    )
+    print(f"   🧩 Detected Narrative State: {narrative_state} (0=Bullish, 1=Neutral, 2=Bearish)")
+    
+    # 5. RL AGENT SIGNAL GENERATION
+    print("\n🧠 RL Agent: Generating Trading Signal...")
+    print("   Inputs: LLM Embedding + Stock Price History + Financial Metrics")
+    
+    signal = rl_agent.get_signal(
+        narrative_vector=current_embedding,
+        price_history=price_history,
+        financial_data=metrics,
+        narrative_state=narrative_state
+    )
+    
+    # 6. DISPLAY RESULTS
+    print("\n" + "="*80)
+    print("📢 FINAL TRADING SIGNAL")
+    print("="*80)
+    print(f"   ACTION: {signal['action']}")
+    print(f"   CONFIDENCE: {signal['confidence']:.2f}")
+    print(f"\n   RATIONALE: {signal['rationale']}")
+    
+    if 'stock_features' in signal:
+        features = signal['stock_features']
+        print(f"\n   📊 Technical Indicators:")
+        print(f"      • Momentum (5d-20d avg): {features['momentum']:.2f}%")
+        print(f"      • Trend (SMA20/SMA50): {features['trend']:.2f}%")
+        print(f"      • RSI (14-day): {features['rsi']:.1f}")
+        print(f"      • Volatility: {features['volatility']:.2f}%")
+        print(f"      • 1-day change: {features['price_change_1d']:.2f}%")
+        print(f"      • 5-day change: {features['price_change_5d']:.2f}%")
+        print(f"      • 20-day change: {features['price_change_20d']:.2f}%")
+    print("="*80 + "\n")
+    
+    # 7. Final Investment Memo
+    print("📝 GENERATING INVESTMENT MEMO...")
+    memo = analyze_with_ai(profile, metrics, signal, None)
+    print("\n" + "="*80)
+    print("INVESTMENT MEMO")
+    print("="*80)
+    print(memo)
+    print("="*80)
 
 if __name__ == "__main__":
     main()

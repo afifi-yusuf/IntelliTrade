@@ -4,4 +4,6 @@ httpx
 pandas
 neo4j
 scikit-learn
+sentence-transformers
+torch
 

@@ -1,0 +1,17 @@
+================================================================================
+BACKTEST PERFORMANCE SUMMARY
+================================================================================
+
+Initial Capital:        $10,000.00
+Final Portfolio Value:  $161,825.14
+Total Return:           +1518.25%
+Annualized Return:      +74.68%
+Sharpe Ratio:           3.17
+Max Drawdown:           54.61%
+Win Rate:               48.09%
+
+Total Trades:           5
+  - Buy Trades:         4
+  - Sell Trades:        1
+  - Hold Days:          151
+Average Trade Size:     $8,654.66

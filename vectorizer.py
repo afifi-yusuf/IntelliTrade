@@ -2,9 +2,13 @@ import numpy as np
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans
+from sklearn.metrics.pairwise import cosine_similarity
 import joblib
 import os
 from typing import Optional
+import logging
+
+logger = logging.getLogger(__name__)
 
 try:
     from openai import AzureOpenAI
@@ -78,6 +82,10 @@ class NarrativeVectorizer:
         self._ensure_models_dir()
         self.is_fitted = False
         self.embedding_cache = {}
+        
+        # Sentiment anchors for zero-shot classification
+        self.sentiment_anchors = None
+        self._initialize_sentiment_anchors()
 
     def _ensure_models_dir(self):
         if not os.path.exists("models"):
@@ -132,61 +140,93 @@ class NarrativeVectorizer:
         vector = self.vectorizer.transform([text])
         return vector.toarray()[0].astype(np.float64)
 
+    def _initialize_sentiment_anchors(self):
+        """
+        Create sentiment anchor embeddings for zero-shot classification.
+        These are computed once and reused for all sentiment detection.
+        """
+        if self.embedding_type == 'huggingface' and self.embedding_model is not None:
+            # Financial sentiment anchors
+            bullish_anchor_text = """
+            The company delivered exceptional results with record revenue growth.
+            Strong demand, expanding margins, and raised guidance indicate robust momentum.
+            Management is optimistic about future opportunities and accelerating business trends.
+            """
+            
+            neutral_anchor_text = """
+            The company reported results in line with expectations.
+            Performance was stable with no major surprises or changes to outlook.
+            Business conditions remain mixed with balanced opportunities and challenges.
+            """
+            
+            bearish_anchor_text = """
+            The company disappointed with declining revenue and weakening fundamentals.
+            Concerns about headwinds, margin pressure, and lowered guidance create uncertainty.
+            Management highlighted significant challenges and risks facing the business.
+            """
+            
+            self.sentiment_anchors = {
+                'bullish': self.get_embedding(bullish_anchor_text),
+                'neutral': self.get_embedding(neutral_anchor_text),
+                'bearish': self.get_embedding(bearish_anchor_text)
+            }
+            logger.info("   ✅ Sentiment anchors initialized")
+    
     def fit(self, texts: list, embeddings: Optional[list] = None):
         """
-        Fit the Clustering model on historical embeddings or summaries.
+        No-op function kept for backward compatibility.
+        Sentiment now determined via zero-shot cosine similarity to anchors.
         """
-        print(f"   📊 [Vectorizer] Fitting on {len(texts)} historical summaries...")
-        
-        if len(texts) < 3:
-            print("   ⚠️ Not enough data to fit KMeans (need > 3 samples). Using fallback logic.")
-            self.is_fitted = False
-            return
-
-        # Get vectors (embeddings or TF-IDF)
-        if embeddings is not None and len(embeddings) == len(texts):
-            vectors = np.array(embeddings, dtype=np.float64)
-        elif self.embedding_type == 'huggingface' or self.embedding_type == 'azure':
-            vectors = np.array([self.get_embedding(text) for text in texts], dtype=np.float64)
-        else:
-            # TF-IDF fallback
-            self.vectorizer.fit_transform(texts)
-            vectors = self.vectorizer.transform(texts).toarray().astype(np.float64)
-        
-        # Ensure float64 dtype for sklearn
-        vectors = vectors.astype(np.float64)
-        
-        # Fit KMeans
-        self.kmeans.fit(vectors)
-        self.is_fitted = True
-        print("   ✅ [Vectorizer] Models fitted successfully.")
+        print("   ✅ [Vectorizer] Ready (using zero-shot sentiment classification)")
+        self.is_fitted = True  # Always "fitted" since we don't need training
 
     def get_narrative_state(self, text: str = None, embedding: np.ndarray = None) -> int:
         """
-        Transform text/embedding into a Discrete Narrative State (Cluster ID).
-        Returns: 0, 1, or 2.
+        Determine sentiment using zero-shot classification with cosine similarity.
+        
+        Compares the input embedding against bullish/neutral/bearish anchor embeddings
+        and returns the state with highest similarity.
+        
+        Returns: 
+            0 = Bullish  (positive sentiment, growth-oriented)
+            1 = Neutral  (mixed or moderate sentiment)
+            2 = Bearish  (negative sentiment, concerns/risks)
         """
-        if not self.is_fitted:
-            # Fallback simple logic if not enough data to fit
-            if text:
-                lower = text.lower()
-                if "growth" in lower or "strong" in lower or "record" in lower:
-                    return 0 # "Bullish"
-                elif "weak" in lower or "decline" in lower or "headwinds" in lower:
-                    return 2 # "Bearish"
-            return 1 # "Neutral"
-
         # Get embedding if not provided
         if embedding is None:
             if text is None:
-                return 1
+                return 1  # Default to neutral
             embedding = self.get_embedding(text)
         
-        # Ensure float64 dtype for sklearn compatibility
         embedding = np.array(embedding, dtype=np.float64)
         
-        cluster_id = self.kmeans.predict([embedding])[0]
-        return int(cluster_id)
+        # If sentiment anchors not initialized (non-HuggingFace mode), use fallback
+        if self.sentiment_anchors is None:
+            # Fallback to simple keyword matching
+            if text:
+                text_lower = text.lower()
+                bullish_score = sum(1 for kw in ['strong', 'growth', 'record', 'exceed', 'robust', 'positive'] if kw in text_lower)
+                bearish_score = sum(1 for kw in ['weak', 'decline', 'concern', 'risk', 'pressure', 'negative'] if kw in text_lower)
+                if bullish_score > bearish_score + 2:
+                    return 0
+                elif bearish_score > bullish_score + 2:
+                    return 2
+            return 1
+        
+        # Zero-shot classification using cosine similarity
+        embedding_reshaped = embedding.reshape(1, -1)
+        
+        similarities = {
+            'bullish': cosine_similarity(embedding_reshaped, self.sentiment_anchors['bullish'].reshape(1, -1))[0][0],
+            'neutral': cosine_similarity(embedding_reshaped, self.sentiment_anchors['neutral'].reshape(1, -1))[0][0],
+            'bearish': cosine_similarity(embedding_reshaped, self.sentiment_anchors['bearish'].reshape(1, -1))[0][0]
+        }
+        
+        # Return state with highest similarity
+        max_sentiment = max(similarities, key=similarities.get)
+        
+        state_map = {'bullish': 0, 'neutral': 1, 'bearish': 2}
+        return state_map[max_sentiment]
     
     def get_narrative_vector(self, text: str) -> np.ndarray:
         """

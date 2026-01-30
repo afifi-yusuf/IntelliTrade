@@ -39,19 +39,19 @@ class MarkovRLAgent:
             "BUY": 0.4, "HOLD": 0.5, "SELL": -0.2
         }
         
-        # 3. Bearish Narrative + Good Financials -> Value Trap? (HOLD)
+        # 3. Bearish Narrative + Good Financials -> Contrarian BUY (good company, temporary weakness)
         self.q_table[(2, 0)] = {
-            "BUY": -0.1, "HOLD": 0.8, "SELL": 0.2
+            "BUY": 0.6, "HOLD": 0.3, "SELL": -0.1  # Changed from conservative HOLD to opportunistic BUY
         }
         
-        # 4. Bearish Narrative + Bad Financials -> SELL
+        # 4. Bearish Narrative + Bad Financials -> SELL or HOLD (avoid catching falling knife)
         self.q_table[(2, 1)] = {
-            "BUY": -0.9, "HOLD": -0.2, "SELL": 0.9
+            "BUY": -0.7, "HOLD": 0.4, "SELL": 0.7  # Slightly less aggressive SELL
         }
         
         # Defaults for others (Neutral)
-        self.q_table[(1, 0)] = {"BUY": 0.6, "HOLD": 0.3, "SELL": -0.1}
-        self.q_table[(1, 1)] = {"BUY": -0.2, "HOLD": 0.6, "SELL": 0.4}
+        self.q_table[(1, 0)] = {"BUY": 0.7, "HOLD": 0.2, "SELL": -0.2}  # More aggressive BUY on good fundamentals
+        self.q_table[(1, 1)] = {"BUY": -0.1, "HOLD": 0.6, "SELL": 0.3}
 
     def extract_stock_features(self, price_history: pd.DataFrame) -> dict:
         """

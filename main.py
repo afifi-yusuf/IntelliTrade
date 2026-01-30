@@ -128,6 +128,11 @@ def get_economic_data_for_quarter(quarter_id: str, current_date: datetime = None
         if current_date <= reporting_date:
             return {}
     
+    def _filter_by_date(df: pd.DataFrame) -> pd.DataFrame:
+        if current_date is None:
+            return df
+        return df[df['date'] <= pd.Timestamp(current_date)]
+    
     # Load economic data files
     economic_data = {}
     
@@ -137,6 +142,7 @@ def get_economic_data_for_quarter(quarter_id: str, current_date: datetime = None
         cpi_df['date'] = pd.to_datetime(cpi_df['date'], errors='coerce')
         # Convert value column to numeric, coercing errors to NaN
         cpi_df['value'] = pd.to_numeric(cpi_df['value'], errors='coerce')
+        cpi_df = _filter_by_date(cpi_df)
         cpi_value = cpi_df[
             (cpi_df['date'].dt.year == year) & 
             (cpi_df['date'].dt.month >= start_month) & 
@@ -148,13 +154,17 @@ def get_economic_data_for_quarter(quarter_id: str, current_date: datetime = None
         inflation_df = pd.read_csv(os.path.join(DATA_DIR, "economic_inflation.csv"))
         inflation_df['date'] = pd.to_datetime(inflation_df['date'], errors='coerce')
         inflation_df['value'] = pd.to_numeric(inflation_df['value'], errors='coerce')
-        inflation_value = inflation_df[inflation_df['date'].dt.year == year]['value'].mean()
+        inflation_df = _filter_by_date(inflation_df)
+        inflation_value = inflation_df[
+            (inflation_df['date'].dt.year == year)
+        ]['value'].mean()
         economic_data['inflation'] = float(inflation_value) if not pd.isna(inflation_value) else None
         
         # Unemployment
         unemployment_df = pd.read_csv(os.path.join(DATA_DIR, "economic_unemployment.csv"))
         unemployment_df['date'] = pd.to_datetime(unemployment_df['date'], errors='coerce')
         unemployment_df['value'] = pd.to_numeric(unemployment_df['value'], errors='coerce')
+        unemployment_df = _filter_by_date(unemployment_df)
         unemployment_value = unemployment_df[
             (unemployment_df['date'].dt.year == year) & 
             (unemployment_df['date'].dt.month >= start_month) & 
@@ -166,13 +176,17 @@ def get_economic_data_for_quarter(quarter_id: str, current_date: datetime = None
         gdp_df = pd.read_csv(os.path.join(DATA_DIR, "economic_real_gdp.csv"))
         gdp_df['date'] = pd.to_datetime(gdp_df['date'], errors='coerce')
         gdp_df['value'] = pd.to_numeric(gdp_df['value'], errors='coerce')
-        gdp_value = gdp_df[gdp_df['date'].dt.year == year]['value'].mean()
+        gdp_df = _filter_by_date(gdp_df)
+        gdp_value = gdp_df[
+            (gdp_df['date'].dt.year == year)
+        ]['value'].mean()
         economic_data['gdp'] = float(gdp_value) if not pd.isna(gdp_value) else None
         
         # Federal Funds Rate
         fed_df = pd.read_csv(os.path.join(DATA_DIR, "economic_federal_funds_rate.csv"))
         fed_df['date'] = pd.to_datetime(fed_df['date'], errors='coerce')
         fed_df['value'] = pd.to_numeric(fed_df['value'], errors='coerce')
+        fed_df = _filter_by_date(fed_df)
         fed_value = fed_df[
             (fed_df['date'].dt.year == year) & 
             (fed_df['date'].dt.month >= start_month) & 
@@ -184,6 +198,7 @@ def get_economic_data_for_quarter(quarter_id: str, current_date: datetime = None
         treasury_df = pd.read_csv(os.path.join(DATA_DIR, "economic_treasury_yield_10y.csv"))
         treasury_df['date'] = pd.to_datetime(treasury_df['date'], errors='coerce')
         treasury_df['value'] = pd.to_numeric(treasury_df['value'], errors='coerce')
+        treasury_df = _filter_by_date(treasury_df)
         treasury_value = treasury_df[
             (treasury_df['date'].dt.year == year) & 
             (treasury_df['date'].dt.month >= start_month) & 

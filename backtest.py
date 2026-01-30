@@ -332,6 +332,20 @@ class Backtester:
                 cached_summary = self.graph_db.retrieve_quarterly_summary(self.ticker, recent_quarter)
             
             if cached_summary and 'embedding' in cached_summary:
+                cache_max_quarter = cached_summary.get("max_quarter")
+                cache_generated_for = cached_summary.get("generated_for_date")
+                cache_valid = cache_max_quarter == recent_quarter
+                if cache_valid and cache_generated_for:
+                    try:
+                        cache_generated_dt = datetime.fromisoformat(str(cache_generated_for))
+                        if cache_generated_dt > date:
+                            cache_valid = False
+                    except Exception:
+                        cache_valid = False
+                if not cache_valid:
+                    cached_summary = None
+            
+            if cached_summary and 'embedding' in cached_summary:
                 # Cache hit - reuse existing analysis
                 llm_analysis_text = cached_summary['text']
                 embedding = np.array(cached_summary['embedding'], dtype=np.float64)
@@ -366,8 +380,12 @@ class Backtester:
                     # Cache it for future trades in this quarter
                     if self.graph_db:
                         self.graph_db.ingest_quarterly_summary(
-                            self.ticker, recent_quarter, llm_analysis_text, 
-                            embedding.tolist()
+                            self.ticker,
+                            recent_quarter,
+                            llm_analysis_text,
+                            embedding.tolist(),
+                            max_quarter=recent_quarter,
+                            generated_for_date=date.date().isoformat()
                         )
                         print(f"   ✅ Cached analysis for {recent_quarter}")
             
@@ -512,6 +530,28 @@ class Backtester:
         logger.info("📊 BACKTEST COMPLETE")
         logger.info("=" * 80)
         
+        # Diagnostic summary
+        if self.portfolio.trade_history:
+            trades = self.portfolio.trade_history
+            total_steps = len(trades)
+            action_counts = {
+                "BUY": sum(1 for t in trades if t.action == "BUY"),
+                "SELL": sum(1 for t in trades if t.action == "SELL"),
+                "HOLD": sum(1 for t in trades if t.action == "HOLD")
+            }
+            market_days = sum(1 for t in trades if t.shares > 0)
+            time_in_market_pct = (market_days / total_steps) * 100 if total_steps > 0 else 0.0
+            buy_sizes = [
+                (t.value / t.portfolio_value) for t in trades
+                if t.action == "BUY" and t.value > 0 and t.portfolio_value > 0
+            ]
+            avg_buy_size_pct = (np.mean(buy_sizes) * 100) if buy_sizes else 0.0
+            
+            logger.info("📌 DIAGNOSTICS")
+            logger.info(f"Action Counts: BUY={action_counts['BUY']} | SELL={action_counts['SELL']} | HOLD={action_counts['HOLD']}")
+            logger.info(f"Time in Market: {time_in_market_pct:.2f}%")
+            logger.info(f"Avg Buy Size: {avg_buy_size_pct:.2f}% of portfolio value")
+        
         # Print RL learning statistics
         if self.rl_agent and self.rl_agent.enable_learning:
             logger.info("")
@@ -519,11 +559,11 @@ class Backtester:
             logger.info("=" * 80)
             stats = self.rl_agent.get_learning_stats()
             logger.info(f"Total Q-value updates: {stats['total_updates']}")
-            logger.info(f"Average reward: {stats['avg_reward']:.4f}")
-            logger.info(f"Reward std dev: {stats['std_reward']:.4f}")
-            logger.info(f"Avg Q-value change: {stats['avg_q_change']:.4f}")
-            logger.info(f"Q-table size (states): {stats['q_table_size']}")
-            logger.info(f"Exploration rate (ε): {stats['exploration_rate']:.2f}")
+            logger.info(f"Average reward: {stats.get('avg_reward', 0.0):.4f}")
+            logger.info(f"Reward std dev: {stats.get('std_reward', 0.0):.4f}")
+            logger.info(f"Avg Q-value change: {stats.get('avg_q_change', 0.0):.4f}")
+            logger.info(f"Q-table size (states): {stats.get('q_table_size', 0)}")
+            logger.info(f"Exploration rate (ε): {stats.get('exploration_rate', 0.0):.2f}")
             logger.info("")
             
             # Save learned model (Q-table or DQN)

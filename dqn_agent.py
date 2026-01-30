@@ -142,6 +142,8 @@ class DQNAgent:
         self.training_steps = 0
         self.episode_rewards = []
         self.losses = []
+        self.reward_history = []
+        self.nan_skips = 0
         
         print(f"🧠 DQN Agent initialized on {self.device}")
         print(f"   State dim: {state_dim}, Action dim: {action_dim}")
@@ -173,6 +175,11 @@ class DQNAgent:
             # Truncate
             narrative_vector = narrative_vector[:expected_embedding_dim]
         
+        # Normalize narrative embedding to stabilize training
+        norm = np.linalg.norm(narrative_vector)
+        if norm > 0:
+            narrative_vector = narrative_vector / norm
+
         # Build state parts list
         state_parts = [narrative_vector]
         
@@ -225,6 +232,10 @@ class DQNAgent:
             
             with torch.no_grad():
                 q_values = self.q_network(state_tensor).cpu().numpy()[0]
+            if not np.all(np.isfinite(q_values)):
+                action_idx = random.randint(0, self.action_dim - 1)
+                q_values = np.zeros(self.action_dim)
+                return action_idx, q_values
             
             action_idx = np.argmax(q_values)
         
@@ -255,6 +266,10 @@ class DQNAgent:
         next_states = torch.FloatTensor(np.array([e.next_state for e in batch])).to(self.device)
         dones = torch.FloatTensor([e.done for e in batch]).to(self.device)
         
+        if not (torch.isfinite(states).all() and torch.isfinite(next_states).all() and torch.isfinite(rewards).all()):
+            self.nan_skips += 1
+            return
+        
         # Current Q-values
         current_q_values = self.q_network(states).gather(1, actions.unsqueeze(1)).squeeze(1)
         
@@ -262,9 +277,15 @@ class DQNAgent:
         with torch.no_grad():
             next_q_values = self.target_network(next_states).max(1)[0]
             target_q_values = rewards + (1 - dones) * self.gamma * next_q_values
+            target_q_values = torch.clamp(target_q_values, -50.0, 50.0)
         
         # Compute loss
         loss = self.loss_fn(current_q_values, target_q_values)
+
+        # Guard against NaNs/Infs
+        if not torch.isfinite(loss):
+            self.nan_skips += 1
+            return
         
         # Optimize
         self.optimizer.zero_grad()
@@ -349,6 +370,7 @@ class DQNAgent:
         if hasattr(self, 'last_portfolio_value') and hasattr(self, 'last_state') and hasattr(self, 'last_action_idx'):
             reward = (current_portfolio_value - self.last_portfolio_value) / self.last_portfolio_value * 100
             reward = np.clip(reward, -10, 10)  # Clip reward
+            self.reward_history.append(float(reward))
             
             # Store experience
             if hasattr(self, 'current_state'):
@@ -384,18 +406,21 @@ class DQNAgent:
     
     def get_learning_stats(self) -> dict:
         """Get learning statistics (compatible with Q-learning interface)"""
+        finite_losses = [v for v in self.losses if np.isfinite(v)]
+        finite_rewards = [v for v in self.reward_history if np.isfinite(v)]
         return {
             'total_updates': self.training_steps,
-            'avg_reward': 0.0,  # TODO: Track average reward
-            'std_reward': 0.0,  # TODO: Track reward std
-            'avg_q_change': np.mean(self.losses[-100:]) if self.losses else 0.0,
+            'avg_reward': float(np.mean(finite_rewards)) if finite_rewards else 0.0,
+            'std_reward': float(np.std(finite_rewards)) if finite_rewards else 0.0,
+            'avg_q_change': float(np.mean(finite_losses[-100:])) if finite_losses else 0.0,
             'q_table_size': self.training_steps,  # Use training steps as proxy
             'exploration_rate': self.epsilon,
             # DQN-specific stats
             'training_steps': self.training_steps,
             'buffer_size': len(self.replay_buffer),
-            'avg_loss': np.mean(self.losses[-100:]) if self.losses else 0.0,
-            'network_params': sum(p.numel() for p in self.q_network.parameters())
+            'avg_loss': float(np.mean(finite_losses[-100:])) if finite_losses else 0.0,
+            'network_params': sum(p.numel() for p in self.q_network.parameters()),
+            'nan_skips': self.nan_skips
         }
     
     def save_model(self, filepath: str):

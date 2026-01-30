@@ -240,7 +240,15 @@ class Neo4jHandler:
         except Exception as e:
             logger.error(f"Error ingesting quarterly context: {e}")
 
-    def ingest_quarterly_summary(self, ticker: str, quarter: str, summary_text: str, embedding: list = None):
+    def ingest_quarterly_summary(
+        self,
+        ticker: str,
+        quarter: str,
+        summary_text: str,
+        embedding: list = None,
+        max_quarter: str = None,
+        generated_for_date: str = None
+    ):
         """
         Ingest the LLM-generated analysis and its embedding vector.
         Path: (:Company)-[:HAS_SUMMARY]->(:Summary)-[:IN_QUARTER]->(:Quarter)
@@ -253,7 +261,9 @@ class Neo4jHandler:
         MERGE (s:Summary {id: $ticker + "_" + $quarter})
         SET s.text = $text,
             s.embedding = $embedding,
-            s.created_at = datetime()
+            s.created_at = datetime(),
+            s.max_quarter = $max_quarter,
+            s.generated_for_date = $generated_for_date
         MERGE (c)-[:HAS_SUMMARY]->(s)
         MERGE (s)-[:IN_QUARTER]->(q)
         """
@@ -262,7 +272,9 @@ class Neo4jHandler:
             "ticker": ticker,
             "quarter": quarter,
             "text": summary_text,
-            "embedding": embedding
+            "embedding": embedding,
+            "max_quarter": max_quarter,
+            "generated_for_date": generated_for_date
         }
         
         try:
@@ -324,7 +336,10 @@ class Neo4jHandler:
         
         query = """
         MATCH (s:Summary {id: $id})
-        RETURN s.text as text, s.embedding as embedding
+        RETURN s.text as text,
+               s.embedding as embedding,
+               s.max_quarter as max_quarter,
+               s.generated_for_date as generated_for_date
         """
         try:
             with self.driver.session() as session:
@@ -333,7 +348,9 @@ class Neo4jHandler:
                 if record:
                     return {
                         "text": record["text"],
-                        "embedding": record.get("embedding")
+                        "embedding": record.get("embedding"),
+                        "max_quarter": record.get("max_quarter"),
+                        "generated_for_date": record.get("generated_for_date")
                     }
         except Exception as e:
             logger.error(f"Error retrieving summary: {e}")
@@ -409,7 +426,7 @@ class Neo4jHandler:
         if max_quarter:
             quarter_filter = "WHERE q.id <= $max_quarter"
             params["max_quarter"] = max_quarter
-        query = query.format(quarter_filter=quarter_filter)
+        query = query.replace("{quarter_filter}", quarter_filter)
         
         output = [f"### Causal-Temporal Knowledge Graph Context for {ticker}"]
         

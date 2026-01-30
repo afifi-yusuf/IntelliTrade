@@ -167,12 +167,20 @@ class Backtester:
         ticker: str = "NVDA",
         initial_capital: float = 10000.0,
         transaction_cost_pct: float = 0.001,
-        rebalance_frequency: str = "weekly"  # daily, weekly, monthly
+        rebalance_frequency: str = "weekly",  # daily, weekly, monthly
+        enable_learning: bool = True,  # Enable Q-learning
+        learning_rate: float = 0.1,  # α
+        discount_factor: float = 0.95,  # γ
+        epsilon: float = 0.1  # ε exploration rate
     ):
         self.ticker = ticker
         self.initial_capital = initial_capital
         self.transaction_cost_pct = transaction_cost_pct
         self.rebalance_frequency = rebalance_frequency
+        self.enable_learning = enable_learning
+        self.learning_rate = learning_rate
+        self.discount_factor = discount_factor
+        self.epsilon = epsilon
         
         self.portfolio = Portfolio(initial_capital, transaction_cost_pct)
         self.vectorizer: Optional[NarrativeVectorizer] = None
@@ -298,8 +306,17 @@ class Backtester:
             
             if self.rl_agent is None:
                 logger.info("🤖 Initializing RL agent (one-time setup)...")
-                self.rl_agent = MarkovRLAgent(narrative_dim=self.vectorizer.embedding_dim)
-                logger.info("   ✅ RL agent ready")
+                self.rl_agent = MarkovRLAgent(
+                    narrative_dim=self.vectorizer.embedding_dim,
+                    learning_rate=self.learning_rate,
+                    discount_factor=self.discount_factor,
+                    epsilon=self.epsilon,
+                    enable_learning=self.enable_learning
+                )
+                if self.enable_learning:
+                    logger.info(f"   ✅ RL agent ready (Learning ENABLED: α={self.learning_rate}, γ={self.discount_factor}, ε={self.epsilon})")
+                else:
+                    logger.info("   ✅ RL agent ready (Learning DISABLED - using fixed Q-table)")
             
             # Get most recent quarter
             recent_quarter = available_quarters[-1]
@@ -423,6 +440,9 @@ class Backtester:
                 )
                 continue
             
+            # Store portfolio value before trade (for RL reward calculation)
+            portfolio_value_before = self.portfolio.get_value(current_price)
+            
             # Generate trading signal
             signal = self.generate_signal_for_date(date, price_history, financial_data)
             
@@ -437,8 +457,19 @@ class Backtester:
                 position_size_pct=1.0
             )
             
-            # Log progress for EVERY trade (not just every 10%)
+            # Get portfolio value after trade
             portfolio_value = self.portfolio.get_value(current_price)
+            
+            # Update RL agent with reward (Q-learning)
+            if self.rl_agent and self.rl_agent.enable_learning:
+                next_state_key = (
+                    signal.get('narrative_state', 1),
+                    signal.get('financial_state', 1)
+                )
+                next_q_values = signal.get('q_values', {"BUY": 0.0, "HOLD": 0.0, "SELL": 0.0})
+                self.rl_agent.update(portfolio_value, next_state_key, next_q_values)
+            
+            # Log progress for EVERY trade (not just every 10%)
             pct_complete = (i + 1) / len(trading_dates) * 100
             
             # Show different symbol based on action
@@ -465,6 +496,25 @@ class Backtester:
         logger.info("=" * 80)
         logger.info("📊 BACKTEST COMPLETE")
         logger.info("=" * 80)
+        
+        # Print RL learning statistics
+        if self.rl_agent and self.rl_agent.enable_learning:
+            logger.info("")
+            logger.info("🧠 Q-LEARNING STATISTICS")
+            logger.info("=" * 80)
+            stats = self.rl_agent.get_learning_stats()
+            logger.info(f"Total Q-value updates: {stats['total_updates']}")
+            logger.info(f"Average reward: {stats['avg_reward']:.4f}")
+            logger.info(f"Reward std dev: {stats['std_reward']:.4f}")
+            logger.info(f"Avg Q-value change: {stats['avg_q_change']:.4f}")
+            logger.info(f"Q-table size (states): {stats['q_table_size']}")
+            logger.info(f"Exploration rate (ε): {stats['exploration_rate']:.2f}")
+            logger.info("")
+            
+            # Save learned Q-table
+            q_table_path = Path("backtest_results") / f"learned_q_table_{self.ticker}.json"
+            q_table_path.parent.mkdir(exist_ok=True)
+            self.rl_agent.save_q_table(str(q_table_path))
         
         return metrics
     

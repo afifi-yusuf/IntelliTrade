@@ -12,12 +12,41 @@ class MarkovRLAgent:
     - Narrative_Vector: TF-IDF vectorized LLM summary (continuous features)
     - Stock_Features: Technical indicators from price history (momentum, volatility, trend)
     - Financial_State: Discretized fundamental metrics
+    
+    **NOW WITH REAL Q-LEARNING:**
+    - Updates Q-values after each trade based on rewards
+    - Explores vs exploits using epsilon-greedy
+    - Learns optimal policy over time
     """
-    def __init__(self, narrative_dim=100):
+    def __init__(self, narrative_dim=100, learning_rate=0.1, discount_factor=0.95, 
+                 epsilon=0.1, enable_learning=True):
+        """
+        Args:
+            narrative_dim: Dimension of narrative embedding
+            learning_rate (α): How much to update Q-values (0-1)
+            discount_factor (γ): How much to value future rewards (0-1)
+            epsilon (ε): Exploration rate for epsilon-greedy (0-1)
+            enable_learning: If True, updates Q-values. If False, uses fixed priors (for comparison)
+        """
         # Q-Table: Maps (Narrative_State, Financial_State) -> {Action: Expected_Reward}
-        # Initialized with some heuristic priors for the demo
         self.q_table = {}
         self.narrative_dim = narrative_dim
+        
+        # Learning parameters
+        self.alpha = learning_rate  # Learning rate
+        self.gamma = discount_factor  # Discount factor
+        self.epsilon = epsilon  # Exploration rate
+        self.enable_learning = enable_learning
+        
+        # Track learning progress
+        self.learning_history = []
+        self.total_updates = 0
+        
+        # Track current state for learning
+        self.last_state = None
+        self.last_action = None
+        self.last_portfolio_value = None
+        
         self._initialize_priors()
 
     def _initialize_priors(self):
@@ -202,9 +231,15 @@ class MarkovRLAgent:
         # Adjust Q-Values based on stock features
         adjusted_q_values = self._adjust_q_values_with_features(base_q_values, stock_features)
         
-        # Select Action with Max Q-Value
-        best_action = max(adjusted_q_values, key=adjusted_q_values.get)
-        confidence = adjusted_q_values[best_action]
+        # Select Action using EPSILON-GREEDY (exploration vs exploitation)
+        if self.enable_learning and np.random.random() < self.epsilon:
+            # Explore: Choose random action
+            best_action = np.random.choice(["BUY", "HOLD", "SELL"])
+            confidence = adjusted_q_values.get(best_action, 0.5)
+        else:
+            # Exploit: Choose best action
+            best_action = max(adjusted_q_values, key=adjusted_q_values.get)
+            confidence = adjusted_q_values[best_action]
         
         # Normalize confidence for display
         confidence = max(0.1, min(1.0, abs(confidence)))
@@ -212,11 +247,18 @@ class MarkovRLAgent:
         # Build detailed rationale
         rationale = self._build_rationale(narrative_state, fin_state, stock_features, best_action)
         
+        # Store current state for learning (will update after trade execution)
+        self.last_state = state_key
+        self.last_action = best_action
+        
         return {
             "action": best_action,
             "confidence": confidence,
             "rationale": rationale,
-            "stock_features": stock_features
+            "narrative_state": narrative_state,
+            "financial_state": fin_state,
+            "stock_features": stock_features,
+            "q_values": adjusted_q_values  # For debugging
         }
     
     def _adjust_q_values_with_features(self, base_q_values: dict, stock_features: dict) -> dict:
@@ -272,3 +314,164 @@ class MarkovRLAgent:
         rationale += f"Policy suggests {action}."
         
         return rationale
+    
+    # ==================== Q-LEARNING METHODS ====================
+    
+    def calculate_reward(self, previous_portfolio_value: float, 
+                        current_portfolio_value: float, 
+                        action: str) -> float:
+        """
+        Calculate reward for the action taken.
+        
+        Reward function considers:
+        - Portfolio value change (profit/loss)
+        - Penalize excessive risk
+        - Small penalty for transaction costs
+        
+        Args:
+            previous_portfolio_value: Portfolio value before trade
+            current_portfolio_value: Portfolio value after trade execution
+            action: Action taken (BUY, HOLD, SELL)
+        
+        Returns:
+            Reward value (positive = good, negative = bad)
+        """
+        if previous_portfolio_value <= 0:
+            return 0.0
+        
+        # Calculate percentage return
+        pct_return = (current_portfolio_value - previous_portfolio_value) / previous_portfolio_value * 100
+        
+        # Base reward is the percentage return
+        reward = pct_return
+        
+        # Small penalty for trading (transaction costs)
+        if action in ["BUY", "SELL"]:
+            reward -= 0.1  # 0.1% transaction cost penalty
+        
+        # Clip reward to reasonable range
+        reward = np.clip(reward, -10, 10)
+        
+        return reward
+    
+    def update(self, current_portfolio_value: float, 
+               next_state_key: tuple, 
+               next_q_values: dict):
+        """
+        Update Q-value using Q-learning (Bellman equation).
+        
+        Q(s,a) = Q(s,a) + α * [reward + γ * max(Q(s',a')) - Q(s,a)]
+        
+        Args:
+            current_portfolio_value: Portfolio value after trade
+            next_state_key: The state transitioned to (narrative, financial)
+            next_q_values: Q-values for next state
+        """
+        if not self.enable_learning:
+            return
+        
+        if self.last_state is None or self.last_action is None or self.last_portfolio_value is None:
+            # First trade - just store state
+            self.last_portfolio_value = current_portfolio_value
+            return
+        
+        # Calculate reward
+        reward = self.calculate_reward(
+            self.last_portfolio_value, 
+            current_portfolio_value, 
+            self.last_action
+        )
+        
+        # Get current Q-value
+        if self.last_state not in self.q_table:
+            self.q_table[self.last_state] = {"BUY": 0.0, "HOLD": 0.0, "SELL": 0.0}
+        
+        current_q = self.q_table[self.last_state][self.last_action]
+        
+        # Get max Q-value for next state
+        max_next_q = max(next_q_values.values()) if next_q_values else 0.0
+        
+        # Q-learning update: Q(s,a) ← Q(s,a) + α[r + γ*max(Q(s',a')) - Q(s,a)]
+        new_q = current_q + self.alpha * (reward + self.gamma * max_next_q - current_q)
+        
+        # Update Q-table
+        self.q_table[self.last_state][self.last_action] = new_q
+        
+        # Track learning progress
+        self.learning_history.append({
+            'state': self.last_state,
+            'action': self.last_action,
+            'reward': reward,
+            'old_q': current_q,
+            'new_q': new_q,
+            'portfolio_value': current_portfolio_value
+        })
+        self.total_updates += 1
+        
+        # Update last portfolio value for next iteration
+        self.last_portfolio_value = current_portfolio_value
+        
+        # Optional: Print learning progress every 50 updates
+        if self.total_updates % 50 == 0:
+            avg_reward = np.mean([h['reward'] for h in self.learning_history[-50:]])
+            print(f"   🧠 RL Update #{self.total_updates} | Avg Reward (last 50): {avg_reward:.3f} | Q-change: {new_q - current_q:.4f}")
+    
+    def get_learning_stats(self) -> dict:
+        """Get statistics about the learning progress."""
+        if len(self.learning_history) == 0:
+            return {
+                'total_updates': 0,
+                'avg_reward': 0.0,
+                'q_table_size': len(self.q_table)
+            }
+        
+        rewards = [h['reward'] for h in self.learning_history]
+        q_changes = [abs(h['new_q'] - h['old_q']) for h in self.learning_history]
+        
+        return {
+            'total_updates': self.total_updates,
+            'avg_reward': np.mean(rewards),
+            'std_reward': np.std(rewards),
+            'avg_q_change': np.mean(q_changes),
+            'q_table_size': len(self.q_table),
+            'exploration_rate': self.epsilon
+        }
+    
+    def save_q_table(self, filepath: str):
+        """Save learned Q-table to file."""
+        import json
+        
+        # Convert tuple keys to strings for JSON serialization
+        serializable_q_table = {
+            f"{k[0]},{k[1]}": v for k, v in self.q_table.items()
+        }
+        
+        with open(filepath, 'w') as f:
+            json.dump({
+                'q_table': serializable_q_table,
+                'learning_stats': self.get_learning_stats(),
+                'params': {
+                    'alpha': self.alpha,
+                    'gamma': self.gamma,
+                    'epsilon': self.epsilon
+                }
+            }, f, indent=2)
+        
+        print(f"💾 Q-table saved to {filepath}")
+    
+    def load_q_table(self, filepath: str):
+        """Load learned Q-table from file."""
+        import json
+        
+        with open(filepath, 'r') as f:
+            data = json.load(f)
+        
+        # Convert string keys back to tuples
+        self.q_table = {
+            tuple(map(int, k.split(','))): v 
+            for k, v in data['q_table'].items()
+        }
+        
+        print(f"📂 Q-table loaded from {filepath}")
+        print(f"   Learned states: {len(self.q_table)}")
+        print(f"   Total updates: {data['learning_stats']['total_updates']}")

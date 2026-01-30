@@ -511,10 +511,19 @@ class Backtester:
             logger.info(f"Exploration rate (ε): {stats['exploration_rate']:.2f}")
             logger.info("")
             
-            # Save learned Q-table
-            q_table_path = Path("backtest_results") / f"learned_q_table_{self.ticker}.json"
-            q_table_path.parent.mkdir(exist_ok=True)
-            self.rl_agent.save_q_table(str(q_table_path))
+            # Save learned model (Q-table or DQN)
+            results_path = Path("backtest_results")
+            results_path.mkdir(exist_ok=True)
+            
+            # Check which type of agent and call appropriate save method
+            if hasattr(self.rl_agent, 'save_q_table'):
+                # Q-learning agent
+                q_table_path = results_path / f"learned_q_table_{self.ticker}.json"
+                self.rl_agent.save_q_table(str(q_table_path))
+            elif hasattr(self.rl_agent, 'save_model'):
+                # DQN agent
+                model_path = results_path / f"dqn_model_{self.ticker}.pth"
+                self.rl_agent.save_model(str(model_path))
         
         return metrics
     

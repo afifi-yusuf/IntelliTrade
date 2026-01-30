@@ -340,8 +340,8 @@ class Backtester:
                 print(f"   🔄 Generating LLM analysis for {recent_quarter} (first time)...")
                 
                 # Build context for this quarter
-                economic_data = get_economic_data_for_quarter(recent_quarter)
-                transcript = load_earnings_transcript(self.ticker, recent_quarter)
+                economic_data = get_economic_data_for_quarter(recent_quarter, current_date=date)
+                transcript = load_earnings_transcript(self.ticker, recent_quarter, current_date=date)
                 
                 if not transcript or len(transcript) < 100:
                     # No transcript available - use neutral embedding and text
@@ -349,13 +349,13 @@ class Backtester:
                     embedding = np.zeros(self.vectorizer.embedding_dim, dtype=np.float64)
                 else:
                     context, _, _ = build_comprehensive_context(
-                        self.ticker, recent_quarter, financial_data
+                        self.ticker, recent_quarter, financial_data, current_date=date
                     )
                     
                     # Retrieve historical context
                     graph_context = ""
                     if self.graph_db:
-                        graph_context = self.graph_db.retrieve_all_context(self.ticker)
+                        graph_context = self.graph_db.retrieve_all_context(self.ticker, max_quarter=recent_quarter)
                     
                     # Generate LLM analysis (this is the slow part, but only happens once per quarter)
                     llm_analysis_text = generate_llm_analysis(context, graph_context)

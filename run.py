@@ -76,10 +76,11 @@ def run_backtest(
     # For DQN, replace the RL agent
     if method == 'dqn':
         from dqn_agent import DQNAgent
+        from vectorizer import NarrativeVectorizer
         
-        # Get state dimension from first signal to properly initialize DQN
-        # For now, use default state dim (384 embedding + 7 stock + 3 narrative + 2 financial)
-        state_dim = 396  # This matches current implementation
+        # Derive state dimension from embedding + features
+        vectorizer = NarrativeVectorizer(model_name='all-MiniLM-L6-v2')
+        state_dim = vectorizer.embedding_dim + 7 + 3 + 2
         
         backtester.rl_agent = DQNAgent(
             state_dim=state_dim,

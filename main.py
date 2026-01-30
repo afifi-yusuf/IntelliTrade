@@ -101,7 +101,7 @@ def fetch_stock_price_history(ticker: str) -> pd.DataFrame:
     
     return None
 
-def get_economic_data_for_quarter(quarter_id: str) -> dict:
+def get_economic_data_for_quarter(quarter_id: str, current_date: datetime = None) -> dict:
     """
     Load economic indicators for a specific quarter.
     quarter_id format: "2025-Q4"
@@ -118,6 +118,15 @@ def get_economic_data_for_quarter(quarter_id: str) -> dict:
         4: (10, 12)  # Q4: Oct-Dec
     }
     start_month, end_month = quarter_months[quarter_num]
+    
+    # Enforce availability: data assumed available ~1 month after quarter end
+    if current_date is not None:
+        if end_month == 12:
+            reporting_date = datetime(year + 1, 1, 31)
+        else:
+            reporting_date = datetime(year, end_month + 1, 30)
+        if current_date <= reporting_date:
+            return {}
     
     # Load economic data files
     economic_data = {}
@@ -187,11 +196,29 @@ def get_economic_data_for_quarter(quarter_id: str) -> dict:
     
     return economic_data
 
-def load_earnings_transcript(ticker: str, quarter_id: str) -> str:
+def load_earnings_transcript(ticker: str, quarter_id: str, current_date: datetime = None) -> str:
     """
     Load earnings transcript for a specific quarter.
     """
     year, quarter = quarter_id.split("-")
+    year = int(year)
+    quarter_num = int(quarter[1])
+    
+    # Enforce availability: transcript assumed available ~1 month after quarter end
+    if current_date is not None:
+        quarter_months = {
+            1: (1, 3),
+            2: (4, 6),
+            3: (7, 9),
+            4: (10, 12)
+        }
+        _, end_month = quarter_months[quarter_num]
+        if end_month == 12:
+            reporting_date = datetime(year + 1, 1, 31)
+        else:
+            reporting_date = datetime(year, end_month + 1, 30)
+        if current_date <= reporting_date:
+            return ""
     
     # Try different filename formats
     patterns = [
@@ -213,7 +240,7 @@ def load_earnings_transcript(ticker: str, quarter_id: str) -> str:
     return ""
 
 def build_comprehensive_context(ticker: str, quarter_id: str, 
-                                financial_metrics: dict) -> str:
+                                financial_metrics: dict, current_date: datetime = None) -> str:
     """
     Build comprehensive context including:
     - Economic indicators
@@ -221,10 +248,10 @@ def build_comprehensive_context(ticker: str, quarter_id: str,
     - Financial metrics
     """
     # Get economic data
-    economic_data = get_economic_data_for_quarter(quarter_id)
+    economic_data = get_economic_data_for_quarter(quarter_id, current_date=current_date)
     
     # Get transcript
-    transcript = load_earnings_transcript(ticker, quarter_id)
+    transcript = load_earnings_transcript(ticker, quarter_id, current_date=current_date)
     
     # Build context string
     context = f"""

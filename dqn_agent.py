@@ -162,9 +162,9 @@ class DQNAgent:
         if narrative_vector.ndim > 1:
             narrative_vector = narrative_vector.flatten()
         
-        # CRITICAL: Ensure consistent embedding dimension (384 for all-MiniLM-L6-v2)
+        # Ensure consistent embedding dimension based on configured state_dim
         # Pad with zeros or truncate to match expected dimension
-        expected_embedding_dim = 384
+        expected_embedding_dim = max(1, self.state_dim - (7 + 3 + 2))
         if len(narrative_vector) < expected_embedding_dim:
             # Pad with zeros
             padding = np.zeros(expected_embedding_dim - len(narrative_vector), dtype=np.float32)
@@ -313,9 +313,7 @@ class DQNAgent:
         
         # Store current state and action for learning
         self.current_state = state
-        self.last_action_idx = action_idx
-        if not hasattr(self, 'last_portfolio_value'):
-            self.last_portfolio_value = 10000.0  # Initial capital
+        self.current_action_idx = action_idx
         
         # Build response
         return {
@@ -342,6 +340,9 @@ class DQNAgent:
         3. Train on batch from replay buffer
         """
         if not self.enable_learning:
+            return
+        
+        if not hasattr(self, 'current_state') or not hasattr(self, 'current_action_idx'):
             return
         
         # Calculate reward
@@ -371,9 +372,15 @@ class DQNAgent:
                           f"Buffer: {stats['buffer_size']}")
         
         # Update last values for next iteration
-        self.last_portfolio_value = current_portfolio_value
-        if hasattr(self, 'current_state'):
+        if not hasattr(self, 'last_state') or not hasattr(self, 'last_action_idx') or not hasattr(self, 'last_portfolio_value'):
             self.last_state = self.current_state
+            self.last_action_idx = self.current_action_idx
+            self.last_portfolio_value = current_portfolio_value
+            return
+
+        self.last_state = self.current_state
+        self.last_action_idx = self.current_action_idx
+        self.last_portfolio_value = current_portfolio_value
     
     def get_learning_stats(self) -> dict:
         """Get learning statistics (compatible with Q-learning interface)"""

@@ -42,10 +42,12 @@ class MarkovRLAgent:
         self.learning_history = []
         self.total_updates = 0
         
-        # Track current state for learning
+        # Track state/action transitions for learning
         self.last_state = None
         self.last_action = None
         self.last_portfolio_value = None
+        self.current_state = None
+        self.current_action = None
         
         self._initialize_priors()
 
@@ -247,9 +249,9 @@ class MarkovRLAgent:
         # Build detailed rationale
         rationale = self._build_rationale(narrative_state, fin_state, stock_features, best_action)
         
-        # Store current state for learning (will update after trade execution)
-        self.last_state = state_key
-        self.last_action = best_action
+        # Store current state/action for learning (used on next update)
+        self.current_state = state_key
+        self.current_action = best_action
         
         return {
             "action": best_action,
@@ -370,8 +372,13 @@ class MarkovRLAgent:
         if not self.enable_learning:
             return
         
+        if self.current_state is None or self.current_action is None:
+            return
+
         if self.last_state is None or self.last_action is None or self.last_portfolio_value is None:
-            # First trade - just store state
+            # First trade - initialize previous state/action
+            self.last_state = self.current_state
+            self.last_action = self.current_action
             self.last_portfolio_value = current_portfolio_value
             return
         
@@ -408,7 +415,9 @@ class MarkovRLAgent:
         })
         self.total_updates += 1
         
-        # Update last portfolio value for next iteration
+        # Update previous state/action for next iteration
+        self.last_state = self.current_state
+        self.last_action = self.current_action
         self.last_portfolio_value = current_portfolio_value
         
         # Optional: Print learning progress every 50 updates

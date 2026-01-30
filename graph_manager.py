@@ -389,7 +389,7 @@ class Neo4jHandler:
             
         return "\n".join(context_lines)
 
-    def retrieve_all_context(self, ticker: str) -> str:
+    def retrieve_all_context(self, ticker: str, max_quarter: str = None) -> str:
         """
         Retrieve a summary of all available facts and reasons for a company.
         """
@@ -399,16 +399,23 @@ class Neo4jHandler:
         query = """
         MATCH (c:Company {ticker: $ticker})-[:REPORTED]->(f:Fact)-[:IN_QUARTER]->(q:Quarter)
         OPTIONAL MATCH (f)-[:HAS_REASON]->(r:Reason)
+        {quarter_filter}
         RETURN q.id as quarter, f.metric as metric, f.value as value, collect(r.text) as reasons
         ORDER BY q.id DESC, f.metric
         LIMIT 20
         """
+        quarter_filter = ""
+        params = {"ticker": ticker}
+        if max_quarter:
+            quarter_filter = "WHERE q.id <= $max_quarter"
+            params["max_quarter"] = max_quarter
+        query = query.format(quarter_filter=quarter_filter)
         
         output = [f"### Causal-Temporal Knowledge Graph Context for {ticker}"]
         
         try:
             with self.driver.session() as session:
-                result = session.run(query, {"ticker": ticker})
+                result = session.run(query, params)
                 current_q = None
                 for record in result:
                     q = record["quarter"]

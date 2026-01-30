@@ -39,7 +39,8 @@ def run_backtest(
     discount_factor: float = 0.95,
     epsilon: float = 0.1,
     enable_learning: bool = True,
-    save_model: bool = True
+    save_model: bool = True,
+    use_confidence_sizing: bool = True
 ):
     """Run backtest with specified method"""
     
@@ -51,6 +52,7 @@ def run_backtest(
     print(f"  Ticker: {ticker}")
     print(f"  Initial Capital: ${initial_capital:,.2f}")
     print(f"  Method: {method}")
+    print(f"  Position Sizing: {'Confidence-weighted (10-100%)' if use_confidence_sizing else 'All-in/all-out (100%)'}")
     
     if method in ['qlearning', 'dqn']:
         print(f"  Learning Enabled: {enable_learning}")
@@ -67,7 +69,8 @@ def run_backtest(
         enable_learning=enable_learning if method != 'fixed' else False,
         learning_rate=learning_rate,
         discount_factor=discount_factor,
-        epsilon=epsilon
+        epsilon=epsilon,
+        use_confidence_sizing=use_confidence_sizing
     )
     
     # For DQN, replace the RL agent
@@ -291,6 +294,8 @@ Examples:
                                 help='Disable learning (evaluation mode)')
     parser_backtest.add_argument('--no-save', action='store_true',
                                 help='Do not save trained model')
+    parser_backtest.add_argument('--no-confidence-sizing', action='store_true',
+                                help='Disable confidence-weighted position sizing (use all-in/all-out)')
     
     # Compare methods
     parser_compare = subparsers.add_parser('compare', help='Compare all methods')
@@ -328,7 +333,8 @@ Examples:
             learning_rate=args.learning_rate,
             epsilon=args.epsilon,
             enable_learning=not args.no_learning,
-            save_model=not args.no_save
+            save_model=not args.no_save,
+            use_confidence_sizing=not args.no_confidence_sizing
         )
     
     elif args.command == 'compare':

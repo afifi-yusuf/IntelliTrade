@@ -157,28 +157,44 @@ class DQNAgent:
         Returns:
             State vector: [narrative_embedding, technical_features, categorical_features]
         """
-        # Narrative embedding (384 dims)
+        # Ensure narrative_vector is 1-dimensional
+        narrative_vector = np.atleast_1d(narrative_vector).astype(np.float32)
+        if narrative_vector.ndim > 1:
+            narrative_vector = narrative_vector.flatten()
+        
+        # CRITICAL: Ensure consistent embedding dimension (384 for all-MiniLM-L6-v2)
+        # Pad with zeros or truncate to match expected dimension
+        expected_embedding_dim = 384
+        if len(narrative_vector) < expected_embedding_dim:
+            # Pad with zeros
+            padding = np.zeros(expected_embedding_dim - len(narrative_vector), dtype=np.float32)
+            narrative_vector = np.concatenate([narrative_vector, padding])
+        elif len(narrative_vector) > expected_embedding_dim:
+            # Truncate
+            narrative_vector = narrative_vector[:expected_embedding_dim]
+        
+        # Build state parts list
         state_parts = [narrative_vector]
         
         # Technical indicators (7 features)
         tech_features = np.array([
-            stock_features.get('momentum', 0.0),
-            stock_features.get('volatility', 0.0),
-            stock_features.get('trend', 0.0),
-            stock_features.get('rsi', 50.0) / 100.0,  # Normalize to 0-1
-            stock_features.get('price_change_1d', 0.0) / 100.0,
-            stock_features.get('price_change_5d', 0.0) / 100.0,
-            stock_features.get('price_change_20d', 0.0) / 100.0
+            float(stock_features.get('momentum', 0.0)),
+            float(stock_features.get('volatility', 0.0)),
+            float(stock_features.get('trend', 0.0)),
+            float(stock_features.get('rsi', 50.0)) / 100.0,  # Normalize to 0-1
+            float(stock_features.get('price_change_1d', 0.0)) / 100.0,
+            float(stock_features.get('price_change_5d', 0.0)) / 100.0,
+            float(stock_features.get('price_change_20d', 0.0)) / 100.0
         ], dtype=np.float32)
         state_parts.append(tech_features)
         
         # One-hot encode categorical states (3 + 2 = 5 features)
         narrative_onehot = np.zeros(3, dtype=np.float32)
-        narrative_onehot[narrative_state] = 1.0
+        narrative_onehot[int(narrative_state)] = 1.0
         state_parts.append(narrative_onehot)
         
         financial_onehot = np.zeros(2, dtype=np.float32)
-        financial_onehot[financial_state] = 1.0
+        financial_onehot[int(financial_state)] = 1.0
         state_parts.append(financial_onehot)
         
         # Concatenate all parts

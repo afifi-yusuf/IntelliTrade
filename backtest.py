@@ -128,16 +128,19 @@ class Portfolio:
                 executed = True
                 
         elif action == "SELL" and self.shares > 0:
-            # Sell all shares
-            shares_traded = self.shares
-            proceeds = shares_traded * current_price
-            transaction_cost = proceeds * self.transaction_cost_pct
-            net_proceeds = proceeds - transaction_cost
+            # Sell shares (respecting position_size_pct for partial sells)
+            shares_to_sell = np.floor(self.shares * position_size_pct)
             
-            self.cash += net_proceeds
-            self.shares = 0.0
-            trade_value = proceeds
-            executed = True
+            if shares_to_sell > 0:
+                shares_traded = shares_to_sell
+                proceeds = shares_traded * current_price
+                transaction_cost = proceeds * self.transaction_cost_pct
+                net_proceeds = proceeds - transaction_cost
+                
+                self.cash += net_proceeds
+                self.shares -= shares_traded
+                trade_value = proceeds
+                executed = True
         
         # Record trade (including HOLD)
         trade = Trade(
@@ -171,7 +174,8 @@ class Backtester:
         enable_learning: bool = True,  # Enable Q-learning
         learning_rate: float = 0.1,  # α
         discount_factor: float = 0.95,  # γ
-        epsilon: float = 0.1  # ε exploration rate
+        epsilon: float = 0.1,  # ε exploration rate
+        use_confidence_sizing: bool = True  # Weight position size by confidence
     ):
         self.ticker = ticker
         self.initial_capital = initial_capital
@@ -181,6 +185,7 @@ class Backtester:
         self.learning_rate = learning_rate
         self.discount_factor = discount_factor
         self.epsilon = epsilon
+        self.use_confidence_sizing = use_confidence_sizing
         
         self.portfolio = Portfolio(initial_capital, transaction_cost_pct)
         self.vectorizer: Optional[NarrativeVectorizer] = None
@@ -446,6 +451,16 @@ class Backtester:
             # Generate trading signal
             signal = self.generate_signal_for_date(date, price_history, financial_data)
             
+            # Calculate position size based on confidence
+            if self.use_confidence_sizing:
+                # Confidence-weighted: Use confidence (0-1) as position size
+                # Ensure minimum 10% and maximum 100%
+                confidence = signal['confidence']
+                position_size = np.clip(confidence, 0.1, 1.0) if confidence > 0 else 0.5
+            else:
+                # All-in/all-out: Always use 100% of capital
+                position_size = 1.0
+            
             # Execute trade
             executed = self.portfolio.execute_trade(
                 action=signal['action'],
@@ -454,7 +469,7 @@ class Backtester:
                 confidence=signal['confidence'],
                 narrative_state=signal.get('narrative_state', 1),
                 financial_state=signal.get('financial_state', 1),
-                position_size_pct=1.0
+                position_size_pct=position_size
             )
             
             # Get portfolio value after trade

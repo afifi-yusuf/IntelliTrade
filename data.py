@@ -1,5 +1,5 @@
 """
-Alpha Vantage Premium Data Collection Script for NVIDIA (NVDA)
+Alpha Vantage Premium Data Collection Script for Tech Tickers
 ==============================================================
 
 Comprehensive data collection from Alpha Vantage API covering:
@@ -61,7 +61,7 @@ Comprehensive data collection from Alpha Vantage API covering:
 11. MARKET CONTEXT
     - Top gainers & losers
     - Most actively traded
-    - ETF holdings (which major ETFs hold NVDA)
+    - ETF holdings (which major ETFs hold the stock)
 
 All data saved as CSV files for offline analysis.
 
@@ -83,7 +83,7 @@ load_dotenv()
 # Configuration
 ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
 BASE_URL = "https://www.alphavantage.co/query"
-TICKER = "NVDA"  # NVIDIA
+TICKERS = ["NVDA", "AAPL", "MSFT", "AMZN", "GOOGL", "META", "TSLA", "ASML", "TSM"]
 OUTPUT_DIR = "data"  # Directory to save CSV files
 
 # Create output directory if it doesn't exist
@@ -126,13 +126,13 @@ def make_request(params: Dict) -> Optional[Dict]:
 # 1. STOCK PRICE DATA (DAILY, WEEKLY, MONTHLY)
 # ============================================================================
 
-def fetch_daily_stock_data():
-    """Fetch daily stock data for NVDA (5 years of history)"""
-    print(f"\n📊 Fetching daily stock data for {TICKER}...")
+def fetch_daily_stock_data(ticker: str):
+    """Fetch daily stock data for ticker (5 years of history)"""
+    print(f"\n📊 Fetching daily stock data for {ticker}...")
     
     params = {
         "function": "TIME_SERIES_DAILY_ADJUSTED",
-        "symbol": TICKER,
+        "symbol": ticker,
         "outputsize": "full",  # Get full history (20+ years)
     }
     
@@ -162,20 +162,20 @@ def fetch_daily_stock_data():
     df = df[df.index >= five_years_ago]
     
     # Save to CSV
-    output_file = f"{OUTPUT_DIR}/{TICKER}_daily_stock_data_5y.csv"
+    output_file = f"{OUTPUT_DIR}/{ticker}_daily_stock_data_5y.csv"
     df.to_csv(output_file)
     print(f"✅ Saved daily stock data: {output_file} ({len(df)} trading days)")
     
     rate_limit_sleep()
 
 
-def fetch_weekly_stock_data():
+def fetch_weekly_stock_data(ticker: str):
     """Fetch weekly adjusted stock data"""
-    print(f"\n📊 Fetching weekly stock data for {TICKER}...")
+    print(f"\n📊 Fetching weekly stock data for {ticker}...")
     
     params = {
         "function": "TIME_SERIES_WEEKLY_ADJUSTED",
-        "symbol": TICKER,
+        "symbol": ticker,
     }
     
     data = make_request(params)
@@ -199,20 +199,20 @@ def fetch_weekly_stock_data():
     df = df.sort_index()
     
     # Save to CSV
-    output_file = f"{OUTPUT_DIR}/{TICKER}_weekly_stock_data.csv"
+    output_file = f"{OUTPUT_DIR}/{ticker}_weekly_stock_data.csv"
     df.to_csv(output_file)
     print(f"✅ Saved weekly stock data: {output_file} ({len(df)} weeks)")
     
     rate_limit_sleep()
 
 
-def fetch_monthly_stock_data():
+def fetch_monthly_stock_data(ticker: str):
     """Fetch monthly adjusted stock data"""
-    print(f"\n📊 Fetching monthly stock data for {TICKER}...")
+    print(f"\n📊 Fetching monthly stock data for {ticker}...")
     
     params = {
         "function": "TIME_SERIES_MONTHLY_ADJUSTED",
-        "symbol": TICKER,
+        "symbol": ticker,
     }
     
     data = make_request(params)
@@ -236,20 +236,20 @@ def fetch_monthly_stock_data():
     df = df.sort_index()
     
     # Save to CSV
-    output_file = f"{OUTPUT_DIR}/{TICKER}_monthly_stock_data.csv"
+    output_file = f"{OUTPUT_DIR}/{ticker}_monthly_stock_data.csv"
     df.to_csv(output_file)
     print(f"✅ Saved monthly stock data: {output_file} ({len(df)} months)")
     
     rate_limit_sleep()
 
 
-def fetch_quote_endpoint():
+def fetch_quote_endpoint(ticker: str):
     """Fetch latest quote snapshot"""
-    print(f"\n💱 Fetching latest quote for {TICKER}...")
+    print(f"\n💱 Fetching latest quote for {ticker}...")
     
     params = {
         "function": "GLOBAL_QUOTE",
-        "symbol": TICKER,
+        "symbol": ticker,
     }
     
     data = make_request(params)
@@ -261,7 +261,7 @@ def fetch_quote_endpoint():
     df = pd.DataFrame([data["Global Quote"]])
     
     # Save to CSV
-    output_file = f"{OUTPUT_DIR}/{TICKER}_latest_quote.csv"
+    output_file = f"{OUTPUT_DIR}/{ticker}_latest_quote.csv"
     df.to_csv(output_file, index=False)
     print(f"✅ Saved latest quote: {output_file}")
     
@@ -272,13 +272,13 @@ def fetch_quote_endpoint():
 # 2. FUNDAMENTAL DATA
 # ============================================================================
 
-def fetch_company_overview():
+def fetch_company_overview(ticker: str):
     """Fetch company overview and fundamentals"""
-    print(f"\n🏢 Fetching company overview for {TICKER}...")
+    print(f"\n🏢 Fetching company overview for {ticker}...")
     
     params = {
         "function": "OVERVIEW",
-        "symbol": TICKER,
+        "symbol": ticker,
     }
     
     data = make_request(params)
@@ -290,20 +290,20 @@ def fetch_company_overview():
     df = pd.DataFrame([data])
     
     # Save to CSV
-    output_file = f"{OUTPUT_DIR}/{TICKER}_company_overview.csv"
+    output_file = f"{OUTPUT_DIR}/{ticker}_company_overview.csv"
     df.to_csv(output_file, index=False)
     print(f"✅ Saved company overview: {output_file}")
     
     rate_limit_sleep()
 
 
-def fetch_income_statement():
+def fetch_income_statement(ticker: str):
     """Fetch income statements"""
-    print(f"\n💰 Fetching income statements for {TICKER}...")
+    print(f"\n💰 Fetching income statements for {ticker}...")
     
     params = {
         "function": "INCOME_STATEMENT",
-        "symbol": TICKER,
+        "symbol": ticker,
     }
     
     data = make_request(params)
@@ -314,27 +314,27 @@ def fetch_income_statement():
     # Annual reports
     if "annualReports" in data:
         df_annual = pd.DataFrame(data["annualReports"])
-        output_file = f"{OUTPUT_DIR}/{TICKER}_income_statement_annual.csv"
+        output_file = f"{OUTPUT_DIR}/{ticker}_income_statement_annual.csv"
         df_annual.to_csv(output_file, index=False)
         print(f"✅ Saved annual income statements: {output_file} ({len(df_annual)} years)")
     
     # Quarterly reports
     if "quarterlyReports" in data:
         df_quarterly = pd.DataFrame(data["quarterlyReports"])
-        output_file = f"{OUTPUT_DIR}/{TICKER}_income_statement_quarterly.csv"
+        output_file = f"{OUTPUT_DIR}/{ticker}_income_statement_quarterly.csv"
         df_quarterly.to_csv(output_file, index=False)
         print(f"✅ Saved quarterly income statements: {output_file} ({len(df_quarterly)} quarters)")
     
     rate_limit_sleep()
 
 
-def fetch_balance_sheet():
+def fetch_balance_sheet(ticker: str):
     """Fetch balance sheets"""
-    print(f"\n📋 Fetching balance sheets for {TICKER}...")
+    print(f"\n📋 Fetching balance sheets for {ticker}...")
     
     params = {
         "function": "BALANCE_SHEET",
-        "symbol": TICKER,
+        "symbol": ticker,
     }
     
     data = make_request(params)
@@ -345,27 +345,27 @@ def fetch_balance_sheet():
     # Annual reports
     if "annualReports" in data:
         df_annual = pd.DataFrame(data["annualReports"])
-        output_file = f"{OUTPUT_DIR}/{TICKER}_balance_sheet_annual.csv"
+        output_file = f"{OUTPUT_DIR}/{ticker}_balance_sheet_annual.csv"
         df_annual.to_csv(output_file, index=False)
         print(f"✅ Saved annual balance sheets: {output_file} ({len(df_annual)} years)")
     
     # Quarterly reports
     if "quarterlyReports" in data:
         df_quarterly = pd.DataFrame(data["quarterlyReports"])
-        output_file = f"{OUTPUT_DIR}/{TICKER}_balance_sheet_quarterly.csv"
+        output_file = f"{OUTPUT_DIR}/{ticker}_balance_sheet_quarterly.csv"
         df_quarterly.to_csv(output_file, index=False)
         print(f"✅ Saved quarterly balance sheets: {output_file} ({len(df_quarterly)} quarters)")
     
     rate_limit_sleep()
 
 
-def fetch_cash_flow():
+def fetch_cash_flow(ticker: str):
     """Fetch cash flow statements"""
-    print(f"\n💸 Fetching cash flow statements for {TICKER}...")
+    print(f"\n💸 Fetching cash flow statements for {ticker}...")
     
     params = {
         "function": "CASH_FLOW",
-        "symbol": TICKER,
+        "symbol": ticker,
     }
     
     data = make_request(params)
@@ -376,27 +376,27 @@ def fetch_cash_flow():
     # Annual reports
     if "annualReports" in data:
         df_annual = pd.DataFrame(data["annualReports"])
-        output_file = f"{OUTPUT_DIR}/{TICKER}_cash_flow_annual.csv"
+        output_file = f"{OUTPUT_DIR}/{ticker}_cash_flow_annual.csv"
         df_annual.to_csv(output_file, index=False)
         print(f"✅ Saved annual cash flow statements: {output_file} ({len(df_annual)} years)")
     
     # Quarterly reports
     if "quarterlyReports" in data:
         df_quarterly = pd.DataFrame(data["quarterlyReports"])
-        output_file = f"{OUTPUT_DIR}/{TICKER}_cash_flow_quarterly.csv"
+        output_file = f"{OUTPUT_DIR}/{ticker}_cash_flow_quarterly.csv"
         df_quarterly.to_csv(output_file, index=False)
         print(f"✅ Saved quarterly cash flow statements: {output_file} ({len(df_quarterly)} quarters)")
     
     rate_limit_sleep()
 
 
-def fetch_earnings():
+def fetch_earnings(ticker: str):
     """Fetch earnings history"""
-    print(f"\n📊 Fetching earnings history for {TICKER}...")
+    print(f"\n📊 Fetching earnings history for {ticker}...")
     
     params = {
         "function": "EARNINGS",
-        "symbol": TICKER,
+        "symbol": ticker,
     }
     
     data = make_request(params)
@@ -407,27 +407,27 @@ def fetch_earnings():
     # Annual earnings
     if "annualEarnings" in data:
         df_annual = pd.DataFrame(data["annualEarnings"])
-        output_file = f"{OUTPUT_DIR}/{TICKER}_earnings_annual.csv"
+        output_file = f"{OUTPUT_DIR}/{ticker}_earnings_annual.csv"
         df_annual.to_csv(output_file, index=False)
         print(f"✅ Saved annual earnings: {output_file} ({len(df_annual)} years)")
     
     # Quarterly earnings
     if "quarterlyEarnings" in data:
         df_quarterly = pd.DataFrame(data["quarterlyEarnings"])
-        output_file = f"{OUTPUT_DIR}/{TICKER}_earnings_quarterly.csv"
+        output_file = f"{OUTPUT_DIR}/{ticker}_earnings_quarterly.csv"
         df_quarterly.to_csv(output_file, index=False)
         print(f"✅ Saved quarterly earnings: {output_file} ({len(df_quarterly)} quarters)")
     
     rate_limit_sleep()
 
 
-def fetch_earnings_estimates():
+def fetch_earnings_estimates(ticker: str):
     """Fetch forward earnings estimates"""
-    print(f"\n🔮 Fetching earnings estimates for {TICKER}...")
+    print(f"\n🔮 Fetching earnings estimates for {ticker}...")
     
     params = {
         "function": "EARNINGS_ESTIMATES",
-        "symbol": TICKER,
+        "symbol": ticker,
     }
     
     data = make_request(params)
@@ -439,20 +439,20 @@ def fetch_earnings_estimates():
     df = pd.DataFrame(data["estimates"])
     
     # Save to CSV
-    output_file = f"{OUTPUT_DIR}/{TICKER}_earnings_estimates.csv"
+    output_file = f"{OUTPUT_DIR}/{ticker}_earnings_estimates.csv"
     df.to_csv(output_file, index=False)
     print(f"✅ Saved earnings estimates: {output_file} ({len(df)} estimates)")
     
     rate_limit_sleep()
 
 
-def fetch_shares_outstanding():
+def fetch_shares_outstanding(ticker: str):
     """Fetch shares outstanding data"""
-    print(f"\n📊 Fetching shares outstanding for {TICKER}...")
+    print(f"\n📊 Fetching shares outstanding for {ticker}...")
     
     params = {
         "function": "SHARES_OUTSTANDING",
-        "symbol": TICKER,
+        "symbol": ticker,
     }
     
     data = make_request(params)
@@ -464,25 +464,25 @@ def fetch_shares_outstanding():
     df = pd.DataFrame(data["data"])
     
     # Save to CSV
-    output_file = f"{OUTPUT_DIR}/{TICKER}_shares_outstanding.csv"
+    output_file = f"{OUTPUT_DIR}/{ticker}_shares_outstanding.csv"
     df.to_csv(output_file, index=False)
     print(f"✅ Saved shares outstanding: {output_file} ({len(df)} data points)")
     
     rate_limit_sleep()
 
 
-def fetch_dividends():
+def fetch_dividends(ticker: str):
     """Fetch dividend history"""
-    print(f"\n💰 Fetching dividend history for {TICKER}...")
+    print(f"\n💰 Fetching dividend history for {ticker}...")
     
     params = {
         "function": "DIVIDENDS",
-        "symbol": TICKER,
+        "symbol": ticker,
     }
     
     data = make_request(params)
     if not data or "data" not in data:
-        print("❌ Failed to fetch dividends (Note: NVDA may not have dividends)")
+        print(f"❌ Failed to fetch dividends (Note: {ticker} may not have dividends)")
         return
     
     # Convert to DataFrame
@@ -490,7 +490,7 @@ def fetch_dividends():
     
     if len(df) > 0:
         # Save to CSV
-        output_file = f"{OUTPUT_DIR}/{TICKER}_dividends.csv"
+        output_file = f"{OUTPUT_DIR}/{ticker}_dividends.csv"
         df.to_csv(output_file, index=False)
         print(f"✅ Saved dividends: {output_file} ({len(df)} dividend payments)")
     else:
@@ -499,13 +499,13 @@ def fetch_dividends():
     rate_limit_sleep()
 
 
-def fetch_splits():
+def fetch_splits(ticker: str):
     """Fetch stock split history"""
-    print(f"\n🔀 Fetching stock split history for {TICKER}...")
+    print(f"\n🔀 Fetching stock split history for {ticker}...")
     
     params = {
         "function": "SPLITS",
-        "symbol": TICKER,
+        "symbol": ticker,
     }
     
     data = make_request(params)
@@ -518,7 +518,7 @@ def fetch_splits():
     
     if len(df) > 0:
         # Save to CSV
-        output_file = f"{OUTPUT_DIR}/{TICKER}_stock_splits.csv"
+        output_file = f"{OUTPUT_DIR}/{ticker}_stock_splits.csv"
         df.to_csv(output_file, index=False)
         print(f"✅ Saved stock splits: {output_file} ({len(df)} splits)")
     else:
@@ -531,13 +531,13 @@ def fetch_splits():
 # 3. EARNINGS CALL TRANSCRIPTS AND CALENDAR (PREMIUM FEATURE)
 # ============================================================================
 
-def fetch_earnings_calendar():
+def fetch_earnings_calendar(ticker: str):
     """Fetch earnings calendar"""
-    print(f"\n📅 Fetching earnings calendar for {TICKER}...")
+    print(f"\n📅 Fetching earnings calendar for {ticker}...")
     
     params = {
         "function": "EARNINGS_CALENDAR",
-        "symbol": TICKER,
+        "symbol": ticker,
         "horizon": "12month",
     }
     
@@ -550,7 +550,7 @@ def fetch_earnings_calendar():
             response.raise_for_status()
             
             # Save CSV directly
-            output_file = f"{OUTPUT_DIR}/{TICKER}_earnings_calendar.csv"
+            output_file = f"{OUTPUT_DIR}/{ticker}_earnings_calendar.csv"
             with open(output_file, 'w') as f:
                 f.write(response.text)
             print(f"✅ Saved earnings calendar: {output_file}")
@@ -560,16 +560,16 @@ def fetch_earnings_calendar():
     rate_limit_sleep()
 
 
-def fetch_earnings_call_transcript(year: str = "2024", quarter: str = "Q3"):
+def fetch_earnings_call_transcript(ticker: str, year: str = "2024", quarter: str = "Q3"):
     """Fetch earnings call transcript for a specific quarter"""
-    print(f"\n📝 Fetching earnings call transcript for {TICKER} {quarter} {year}...")
+    print(f"\n📝 Fetching earnings call transcript for {ticker} {quarter} {year}...")
     
     # Alpha Vantage format: quarter=2024Q1 (year+quarter combined)
     quarter_param = f"{year}{quarter}"
     
     params = {
         "function": "EARNINGS_CALL_TRANSCRIPT",
-        "symbol": TICKER,
+        "symbol": ticker,
         "quarter": quarter_param,
     }
     
@@ -591,7 +591,7 @@ def fetch_earnings_call_transcript(year: str = "2024", quarter: str = "Q3"):
             return False
     
     # Save transcript - handle different response formats
-    output_file = f"{OUTPUT_DIR}/{TICKER}_earnings_transcript_{year}_{quarter}.txt"
+    output_file = f"{OUTPUT_DIR}/{ticker}_earnings_transcript_{year}_{quarter}.txt"
     
     try:
         # Alpha Vantage returns transcript in different possible formats
@@ -638,9 +638,9 @@ def fetch_earnings_call_transcript(year: str = "2024", quarter: str = "Q3"):
         return False
 
 
-def fetch_all_recent_earnings_transcripts():
+def fetch_all_recent_earnings_transcripts(ticker: str):
     """Fetch earnings call transcripts for recent quarters (5 years = 20 quarters)"""
-    print(f"\n📝 Fetching earnings call transcripts for {TICKER} (last 5 years)...")
+    print(f"\n📝 Fetching earnings call transcripts for {ticker} (last 5 years)...")
     
     # Fetch transcripts for the last 20 quarters (5 years)
     # Start from the most recent completed quarter
@@ -666,7 +666,7 @@ def fetch_all_recent_earnings_transcripts():
     
     success_count = 0
     for year, quarter in quarters_to_fetch:
-        if fetch_earnings_call_transcript(str(year), quarter):
+        if fetch_earnings_call_transcript(ticker, str(year), quarter):
             success_count += 1
     
     if success_count > 0:
@@ -679,13 +679,13 @@ def fetch_all_recent_earnings_transcripts():
 # 4. NEWS AND SENTIMENT (PREMIUM FEATURE)
 # ============================================================================
 
-def fetch_news_sentiment():
+def fetch_news_sentiment(ticker: str):
     """Fetch news and sentiment data"""
-    print(f"\n📰 Fetching news & sentiment for {TICKER}...")
+    print(f"\n📰 Fetching news & sentiment for {ticker}...")
     
     params = {
         "function": "NEWS_SENTIMENT",
-        "tickers": TICKER,
+        "tickers": ticker,
         "limit": 1000,  # Get up to 1000 news articles
     }
     
@@ -711,7 +711,7 @@ def fetch_news_sentiment():
         # Extract ticker-specific sentiment
         if "ticker_sentiment" in item:
             for ticker_data in item["ticker_sentiment"]:
-                if ticker_data.get("ticker") == TICKER:
+                if ticker_data.get("ticker") == ticker:
                     news_item["ticker_sentiment_score"] = ticker_data.get("ticker_sentiment_score")
                     news_item["ticker_sentiment_label"] = ticker_data.get("ticker_sentiment_label")
                     news_item["ticker_relevance_score"] = ticker_data.get("relevance_score")
@@ -719,7 +719,7 @@ def fetch_news_sentiment():
         news_items.append(news_item)
     
     df = pd.DataFrame(news_items)
-    output_file = f"{OUTPUT_DIR}/{TICKER}_news_sentiment.csv"
+    output_file = f"{OUTPUT_DIR}/{ticker}_news_sentiment.csv"
     df.to_csv(output_file, index=False)
     print(f"✅ Saved news & sentiment: {output_file} ({len(df)} articles)")
     
@@ -730,14 +730,14 @@ def fetch_news_sentiment():
 # 5. INSIDER TRANSACTIONS
 # ============================================================================
 
-def fetch_insider_transactions():
+def fetch_insider_transactions(ticker: str):
     """Fetch insider transaction data"""
-    print(f"\n👔 Fetching insider transactions for {TICKER}...")
+    print(f"\n👔 Fetching insider transactions for {ticker}...")
     
     # Note: Alpha Vantage uses INSIDER_TRANSACTIONS function (check if available in your plan)
     params = {
         "function": "INSIDER_TRANSACTIONS",
-        "symbol": TICKER,
+        "symbol": ticker,
     }
     
     data = make_request(params)
@@ -747,7 +747,7 @@ def fetch_insider_transactions():
     
     # Convert to DataFrame
     df = pd.DataFrame(data["data"])
-    output_file = f"{OUTPUT_DIR}/{TICKER}_insider_transactions.csv"
+    output_file = f"{OUTPUT_DIR}/{ticker}_insider_transactions.csv"
     df.to_csv(output_file, index=False)
     print(f"✅ Saved insider transactions: {output_file} ({len(df)} transactions)")
     
@@ -758,12 +758,12 @@ def fetch_insider_transactions():
 # 6. TECHNICAL INDICATORS
 # ============================================================================
 
-def fetch_technical_indicator(indicator: str, params: Dict, filename: str):
+def fetch_technical_indicator(ticker: str, indicator: str, params: Dict, filename: str):
     """Generic function to fetch technical indicators"""
     print(f"  📈 Fetching {indicator}...")
     
     params.update({
-        "symbol": TICKER,
+        "symbol": ticker,
         "interval": "daily",
     })
     
@@ -794,16 +794,16 @@ def fetch_technical_indicator(indicator: str, params: Dict, filename: str):
     df = df[df.index >= five_years_ago]
     
     # Save to CSV
-    output_file = f"{OUTPUT_DIR}/{TICKER}_{filename}.csv"
+    output_file = f"{OUTPUT_DIR}/{ticker}_{filename}.csv"
     df.to_csv(output_file)
     print(f"  ✅ Saved {indicator}: {output_file} ({len(df)} days)")
     
     rate_limit_sleep()
 
 
-def fetch_all_technical_indicators():
+def fetch_all_technical_indicators(ticker: str):
     """Fetch various technical indicators"""
-    print(f"\n📊 Fetching technical indicators for {TICKER}...")
+    print(f"\n📊 Fetching technical indicators for {ticker}...")
     
     indicators = [
         # Moving Averages
@@ -835,7 +835,7 @@ def fetch_all_technical_indicators():
     indicators.append(("VWAP", {"function": "VWAP"}, "vwap"))
     
     for name, params, filename in indicators:
-        fetch_technical_indicator(name, params, filename)
+        fetch_technical_indicator(ticker, name, params, filename)
 
 
 # ============================================================================
@@ -905,13 +905,13 @@ def fetch_all_economic_indicators():
 # 8. ANALYTICS (PREMIUM FEATURE)
 # ============================================================================
 
-def fetch_analytics_fixed_window():
+def fetch_analytics_fixed_window(ticker: str):
     """Fetch analytics with fixed window"""
-    print(f"\n📊 Fetching analytics (fixed window) for {TICKER}...")
+    print(f"\n📊 Fetching analytics (fixed window) for {ticker}...")
     
     params = {
         "function": "ANALYTICS_FIXED_WINDOW",
-        "symbol": TICKER,
+        "symbol": ticker,
         "RANGE": "full",  # Full historical analysis
         "INTERVAL": "DAILY",
         "CALCULATIONS": "MEAN,MEDIAN,STDDEV,MIN,MAX",
@@ -926,20 +926,20 @@ def fetch_analytics_fixed_window():
     df = pd.DataFrame(data["data"])
     
     # Save to CSV
-    output_file = f"{OUTPUT_DIR}/{TICKER}_analytics_fixed_window.csv"
+    output_file = f"{OUTPUT_DIR}/{ticker}_analytics_fixed_window.csv"
     df.to_csv(output_file, index=False)
     print(f"✅ Saved analytics (fixed window): {output_file}")
     
     rate_limit_sleep()
 
 
-def fetch_analytics_sliding_window():
+def fetch_analytics_sliding_window(ticker: str):
     """Fetch analytics with sliding window"""
-    print(f"\n📊 Fetching analytics (sliding window) for {TICKER}...")
+    print(f"\n📊 Fetching analytics (sliding window) for {ticker}...")
     
     params = {
         "function": "ANALYTICS_SLIDING_WINDOW",
-        "symbol": TICKER,
+        "symbol": ticker,
         "RANGE": "full",
         "INTERVAL": "DAILY",
         "WINDOW_SIZE": "20",  # 20-day sliding window
@@ -955,7 +955,7 @@ def fetch_analytics_sliding_window():
     df = pd.DataFrame(data["data"])
     
     # Save to CSV
-    output_file = f"{OUTPUT_DIR}/{TICKER}_analytics_sliding_window.csv"
+    output_file = f"{OUTPUT_DIR}/{ticker}_analytics_sliding_window.csv"
     df.to_csv(output_file, index=False)
     print(f"✅ Saved analytics (sliding window): {output_file}")
     
@@ -990,11 +990,11 @@ def fetch_top_gainers_losers():
 # 9. ADDITIONAL CONTEXT
 # ============================================================================
 
-def fetch_etf_holdings_that_own_stock():
-    """Find which ETFs hold NVDA stock (requires knowing major ETF symbols)"""
-    print(f"\n📦 Checking major ETF holdings of {TICKER}...")
+def fetch_etf_holdings_that_own_stock(ticker: str):
+    """Find which ETFs hold the stock (requires knowing major ETF symbols)"""
+    print(f"\n📦 Checking major ETF holdings of {ticker}...")
     
-    # Major ETFs that likely hold NVDA (tech-focused and broad market)
+    # Major ETFs that likely hold tech stocks (tech-focused and broad market)
     major_etfs = ["QQQ", "SPY", "VGT", "XLK", "SOXX", "SMH", "VTI", "IWF"]
     
     all_holdings = []
@@ -1008,24 +1008,24 @@ def fetch_etf_holdings_that_own_stock():
         
         data = make_request(params)
         if data and "holdings" in data:
-            # Look for NVDA in holdings
+            # Look for ticker in holdings
             holdings = data.get("holdings", [])
             for holding in holdings:
-                if holding.get("symbol") == TICKER:
+                if holding.get("symbol") == ticker:
                     all_holdings.append({
                         "etf": etf_symbol,
                         "etf_name": data.get("name", ""),
                         "weight": holding.get("weight", ""),
                         "shares": holding.get("shares", ""),
                     })
-                    print(f"    ✅ Found {TICKER} in {etf_symbol}")
+                    print(f"    ✅ Found {ticker} in {etf_symbol}")
                     break
         
         rate_limit_sleep(0.3)
     
     if all_holdings:
         df = pd.DataFrame(all_holdings)
-        output_file = f"{OUTPUT_DIR}/{TICKER}_etf_holdings.csv"
+        output_file = f"{OUTPUT_DIR}/{ticker}_etf_holdings.csv"
         df.to_csv(output_file, index=False)
         print(f"✅ Saved ETF holdings: {output_file} ({len(all_holdings)} ETFs)")
     else:
@@ -1039,9 +1039,9 @@ def fetch_etf_holdings_that_own_stock():
 def main():
     """Main function to fetch all data"""
     print("=" * 80)
-    print("🚀 ALPHA VANTAGE PREMIUM DATA COLLECTION FOR NVIDIA (NVDA)")
+    print("🚀 ALPHA VANTAGE PREMIUM DATA COLLECTION")
     print("=" * 80)
-    print(f"Ticker: {TICKER}")
+    print(f"Tickers: {', '.join(TICKERS)}")
     print(f"Output Directory: {OUTPUT_DIR}/")
     print(f"Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 80)
@@ -1051,83 +1051,96 @@ def main():
         return
     
     try:
-        # 1. Stock Price Data (Multiple Timeframes)
-        print("\n" + "=" * 80)
-        print("1️⃣  STOCK PRICE DATA")
-        print("=" * 80)
-        fetch_daily_stock_data()
-        fetch_weekly_stock_data()
-        fetch_monthly_stock_data()
-        fetch_quote_endpoint()
-        
-        # 2. Fundamental Data
-        print("\n" + "=" * 80)
-        print("2️⃣  FUNDAMENTAL DATA")
-        print("=" * 80)
-        fetch_company_overview()
-        fetch_income_statement()
-        fetch_balance_sheet()
-        fetch_cash_flow()
-        fetch_shares_outstanding()
-        
-        # 3. Earnings Data
-        print("\n" + "=" * 80)
-        print("3️⃣  EARNINGS DATA")
-        print("=" * 80)
-        fetch_earnings()
-        fetch_earnings_estimates()
-        fetch_earnings_calendar()
-        
-        # 4. Earnings Call Transcripts (Premium)
-        print("\n" + "=" * 80)
-        print("4️⃣  EARNINGS CALL TRANSCRIPTS (Premium)")
-        print("=" * 80)
-        fetch_all_recent_earnings_transcripts()
-        
-        # 5. Corporate Actions
-        print("\n" + "=" * 80)
-        print("5️⃣  CORPORATE ACTIONS")
-        print("=" * 80)
-        fetch_dividends()
-        fetch_splits()
-        
-        # 6. News & Sentiment (Premium)
-        print("\n" + "=" * 80)
-        print("6️⃣  NEWS & SENTIMENT (Premium)")
-        print("=" * 80)
-        fetch_news_sentiment()
-        
-        # 7. Insider Transactions (Premium)
-        print("\n" + "=" * 80)
-        print("7️⃣  INSIDER TRANSACTIONS (Premium)")
-        print("=" * 80)
-        fetch_insider_transactions()
-        
-        # 8. Technical Indicators
-        print("\n" + "=" * 80)
-        print("8️⃣  TECHNICAL INDICATORS")
-        print("=" * 80)
-        fetch_all_technical_indicators()
+        # Loop through each ticker
+        for ticker in TICKERS:
+            print("\n" + "#" * 80)
+            print(f"PROCESSING TICKER: {ticker}")
+            print("#" * 80)
+            
+            # 1. Stock Price Data (Multiple Timeframes)
+            print("\n" + "=" * 80)
+            print(f"1️⃣  STOCK PRICE DATA ({ticker})")
+            print("=" * 80)
+            fetch_daily_stock_data(ticker)
+            fetch_weekly_stock_data(ticker)
+            fetch_monthly_stock_data(ticker)
+            fetch_quote_endpoint(ticker)
+            
+            # 2. Fundamental Data
+            print("\n" + "=" * 80)
+            print(f"2️⃣  FUNDAMENTAL DATA ({ticker})")
+            print("=" * 80)
+            fetch_company_overview(ticker)
+            fetch_income_statement(ticker)
+            fetch_balance_sheet(ticker)
+            fetch_cash_flow(ticker)
+            fetch_shares_outstanding(ticker)
+            
+            # 3. Earnings Data
+            print("\n" + "=" * 80)
+            print(f"3️⃣  EARNINGS DATA ({ticker})")
+            print("=" * 80)
+            fetch_earnings(ticker)
+            fetch_earnings_estimates(ticker)
+            fetch_earnings_calendar(ticker)
+            
+            # 4. Earnings Call Transcripts (Premium)
+            print("\n" + "=" * 80)
+            print(f"4️⃣  EARNINGS CALL TRANSCRIPTS (Premium) ({ticker})")
+            print("=" * 80)
+            fetch_all_recent_earnings_transcripts(ticker)
+            
+            # 5. Corporate Actions
+            print("\n" + "=" * 80)
+            print(f"5️⃣  CORPORATE ACTIONS ({ticker})")
+            print("=" * 80)
+            fetch_dividends(ticker)
+            fetch_splits(ticker)
+            
+            # 6. News & Sentiment (Premium)
+            print("\n" + "=" * 80)
+            print(f"6️⃣  NEWS & SENTIMENT (Premium) ({ticker})")
+            print("=" * 80)
+            fetch_news_sentiment(ticker)
+            
+            # 7. Insider Transactions (Premium)
+            print("\n" + "=" * 80)
+            print(f"7️⃣  INSIDER TRANSACTIONS (Premium) ({ticker})")
+            print("=" * 80)
+            fetch_insider_transactions(ticker)
+            
+            # 8. Technical Indicators
+            print("\n" + "=" * 80)
+            print(f"8️⃣  TECHNICAL INDICATORS ({ticker})")
+            print("=" * 80)
+            fetch_all_technical_indicators(ticker)
+            
+            # 10. Analytics (Premium)
+            print("\n" + "=" * 80)
+            print(f"🔟 ANALYTICS (Premium) ({ticker})")
+            print("=" * 80)
+            fetch_analytics_fixed_window(ticker)
+            fetch_analytics_sliding_window(ticker)
+            
+            # 11. Market Context (Ticker Specific)
+            print("\n" + "=" * 80)
+            print(f"1️⃣1️⃣  MARKET CONTEXT ({ticker})")
+            print("=" * 80)
+            fetch_etf_holdings_that_own_stock(ticker)
+
+        # Global Data (Run Once)
+        print("\n" + "#" * 80)
+        print("PROCESSING GLOBAL MARKET DATA")
+        print("#" * 80)
         
         # 9. Economic Indicators
         print("\n" + "=" * 80)
         print("9️⃣  ECONOMIC INDICATORS (Fed Data)")
         print("=" * 80)
         fetch_all_economic_indicators()
-        
-        # 10. Analytics (Premium)
-        print("\n" + "=" * 80)
-        print("🔟 ANALYTICS (Premium)")
-        print("=" * 80)
-        fetch_analytics_fixed_window()
-        fetch_analytics_sliding_window()
-        
-        # 11. Market Context
-        print("\n" + "=" * 80)
-        print("1️⃣1️⃣  MARKET CONTEXT")
-        print("=" * 80)
+            
+        # 11. Market Context (Global)
         fetch_top_gainers_losers()
-        fetch_etf_holdings_that_own_stock()
         
     except KeyboardInterrupt:
         print("\n\n⚠️  Interrupted by user")
@@ -1141,38 +1154,7 @@ def main():
     print("=" * 80)
     print(f"Finished: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"\n📁 All data saved to: {OUTPUT_DIR}/")
-    print("\n📊 Files created:")
-    
-    # List all files created
-    import glob
-    all_files = glob.glob(f"{OUTPUT_DIR}/*")
-    
-    # Separate by file type
-    csv_files = [f for f in all_files if f.endswith('.csv')]
-    txt_files = [f for f in all_files if f.endswith('.txt')]
-    json_files = [f for f in all_files if f.endswith('.json')]
-    
-    print(f"\n  CSV Files ({len(csv_files)}):")
-    for i, file in enumerate(sorted(csv_files), 1):
-        size = os.path.getsize(file) / 1024  # Size in KB
-        print(f"    {i}. {os.path.basename(file)} ({size:.1f} KB)")
-    
-    if txt_files:
-        print(f"\n  Transcript Files ({len(txt_files)}):")
-        for i, file in enumerate(sorted(txt_files), 1):
-            size = os.path.getsize(file) / 1024
-            print(f"    {i}. {os.path.basename(file)} ({size:.1f} KB)")
-    
-    if json_files:
-        print(f"\n  JSON Files ({len(json_files)}):")
-        for i, file in enumerate(sorted(json_files), 1):
-            size = os.path.getsize(file) / 1024
-            print(f"    {i}. {os.path.basename(file)} ({size:.1f} KB)")
-    
-    total_size = sum(os.path.getsize(f) for f in all_files) / (1024 * 1024)  # MB
-    print(f"\n  📦 Total data collected: {total_size:.2f} MB")
-    
-    print("\n" + "=" * 80)
+    print(f"\n� Check {OUTPUT_DIR}/ for results.")
 
 
 if __name__ == "__main__":

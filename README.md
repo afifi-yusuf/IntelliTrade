@@ -16,11 +16,18 @@ Research prototype that combines LLM analysis, a Neo4j knowledge graph, and RL�
 - Results are **in‑sample** unless you add a walk‑forward split.
 
 ## Setup
-```bash
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 ```
+
+### Data Fetching
+To collect data for specific tickers, edit the `TICKERS` list in `data.py` and run:
+```bash
+python data.py
+```
+This will fetch daily/weekly prices, financials, and transcripts for all configured tickers (e.g., NVDA, AAPL, MSFT, ...).
+**Note:** This requires an Alpha Vantage Premium key.
 
 Create `.env`:
 ```bash
@@ -73,3 +80,10 @@ vectorizer.py     # embeddings/sentiment
 data.py           # Alpha Vantage collection
 data/             # CSVs
 ```
+
+### Customizing Tickers
+To run the RAG pipeline (`main.py`) for different tickers, update the `tickers` list in `main.py`:
+```python
+tickers = ["NVDA", "AAPL", "MSFT", ...]
+```
+Ensure you have fetched data for these tickers first using `data.py`.

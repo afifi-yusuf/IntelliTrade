@@ -490,8 +490,19 @@ def main():
     print("🤖 INTELLISENSE: CONTEXT ENRICHED AGENTIC RAG SYSTEM")
     print("="*80)
     
-    ticker = "NVDA"
-    print(f"🚀 Target: {ticker}")
+    tickers = ["NVDA", "AAPL", "MSFT", "AMZN", "GOOGL", "META", "TSLA", "ASML", "TSM"]
+    
+    for ticker in tickers:
+        print("\n" + "#"*80)
+        print(f"🚀 Processing Target: {ticker}")
+        print("#"*80)
+        
+        try:
+            process_ticker(ticker)
+        except Exception as e:
+            print(f"❌ Error processing {ticker}: {e}")
+
+def process_ticker(ticker):
     
     # 1. Load Financials
     print("\n📂 Loading Financial Data...")

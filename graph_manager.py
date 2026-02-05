@@ -53,9 +53,10 @@ class Neo4jHandler:
             return
         
         queries = [
-            "CREATE CONSTRAINT company_ticker IF NOT EXISTS FOR (c:Company) REQUIRE c.ticker IS UNIQUE",
+            "CREATE CONSTRAINT ticker_symbol IF NOT EXISTS FOR (t:Ticker) REQUIRE t.symbol IS UNIQUE",
             "CREATE CONSTRAINT quarter_id IF NOT EXISTS FOR (q:Quarter) REQUIRE q.id IS UNIQUE",
-            "CREATE CONSTRAINT fact_id IF NOT EXISTS FOR (f:Fact) REQUIRE f.id IS UNIQUE" 
+            "CREATE CONSTRAINT fact_id IF NOT EXISTS FOR (f:Fact) REQUIRE f.id IS UNIQUE",
+            "CREATE CONSTRAINT metric_name IF NOT EXISTS FOR (m:Metric) REQUIRE m.name IS UNIQUE"
         ]
         
         with self.driver.session() as session:
@@ -65,25 +66,41 @@ class Neo4jHandler:
                 except Exception as e:
                     logger.warning(f"Constraint creation failed (might already exist): {e}")
 
+    def clear_graph(self):
+        """
+        Clear all data from the Neo4j database.
+        WARNING: This deletes everything!
+        """
+        if not self.driver:
+            return
+        
+        query = "MATCH (n) DETACH DELETE n"
+        try:
+            with self.driver.session() as session:
+                session.run(query)
+            logger.info("⚠️  CLEARED ENTIRE GRAPH DATABASE")
+        except Exception as e:
+            logger.error(f"Error clearing graph: {e}")
+
     # =========================================================================
     # INGESTION
     # =========================================================================
 
     def ingest_company_profile(self, profile_data: Dict[str, Any]):
         """
-        Ingest company profile node.
-        Expects keys: ticker, name, finnhubIndustry, etc.
+        Ingest company/ticker profile node.
         """
         if not self.driver or not profile_data:
             return
 
+        # Using Ticker label as per reference
         query = """
-        MERGE (c:Company {ticker: $ticker})
-        SET c.name = $name,
-            c.industry = $industry,
-            c.sector = $sector,
-            c.description = $description,
-            c.last_updated = datetime()
+        MERGE (t:Ticker {symbol: $ticker})
+        SET t.name = $name,
+            t.industry = $industry,
+            t.sector = $sector,
+            t.description = $description,
+            t.last_updated = datetime()
         """
         
         params = {
@@ -97,57 +114,114 @@ class Neo4jHandler:
         try:
             with self.driver.session() as session:
                 session.run(query, params)
-            logger.info(f"Ingested company profile for {params['ticker']}")
+            logger.info(f"Ingested Ticker profile for {params['ticker']}")
         except Exception as e:
             logger.error(f"Error ingesting company profile: {e}")
 
-    def ingest_financial_fact(self, ticker: str, quarter: str, metric: str, value: float, unit: str = "USD"):
+    def ingest_financial_facts_batch(self, facts_data: list):
         """
-        Ingest a specific financial fact (node) and link it to Company and Quarter.
-        
-        Node Schema: (:Fact {id, metric, value, unit, quarter})
-        Path: (:Company)-[:REPORTED]->(:Fact)-[:IN_QUARTER]->(:Quarter)
+        Ingest a batch of financial facts for improved performance.
+        Expected facts_data format:
+        [
+            {
+                "ticker": "AAPL",
+                "quarter": "2024-Q1",
+                "metric": "Revenue",
+                "value": 100.0,
+                "unit": "USD",
+                "fact_id": "AAPL_2024-Q1_Revenue",
+                "prev_fact_id": "AAPL_2023-Q4_Revenue" (optional)
+            },
+            ...
+        ]
         """
-        if not self.driver:
+        if not self.driver or not facts_data:
             return
 
-        # Create a unique ID for the fact to avoid duplicates
-        fact_id = f"{ticker}_{quarter}_{metric}"
-
         query = """
-        MERGE (c:Company {ticker: $ticker})
-        MERGE (q:Quarter {id: $quarter})
+        UNWIND $batch AS item
+        MERGE (t:Ticker {symbol: item.ticker})
+        MERGE (q:Quarter {id: item.quarter})
+        MERGE (t)-[:REPORTS_IN]->(q)
         
-        MERGE (f:Fact {id: $fact_id})
-        SET f.metric = $metric,
-            f.value = $value,
-            f.unit = $unit,
-            f.quarter = $quarter
+        MERGE (m:Metric {name: item.metric})
         
-        MERGE (c)-[:REPORTED]->(f)
-        MERGE (f)-[:IN_QUARTER]->(q)
+        MERGE (f:Fact {id: item.fact_id})
+        SET f.ticker = item.ticker,
+            f.quarter = item.quarter,
+            f.metric_name = item.metric,
+            f.value = item.value,
+            f.unit = item.unit,
+            f.created_at = datetime()
+        
+        MERGE (v:Value {id: item.fact_id + "_val"})
+        SET v.content = toString(item.value)
+        
+        MERGE (q)-[:HAS_FACT]->(f)
+        MERGE (f)-[:FOR_FIRM]->(t)
+        MERGE (f)-[:HAS_METRIC]->(m)
+        MERGE (f)-[:HAS_VALUE]->(v)
+        
+        // Handle QoQ comparison if previous fact exists
+        // Note: In pure Cypher UNWIND, conditional matching is tricky. 
+        // We use FOREACH hack or separate query. Here we use a conditional merge via CASE/FOREACH simulation if needed, 
+        // but simpler is to just try to match.
+        WITH f, item
+        WHERE item.prev_fact_id IS NOT NULL
+        MATCH (prev_f:Fact {id: item.prev_fact_id})
+        MERGE (f)-[rel:QoQ_COMPARES]->(prev_f)
+        SET rel.diff = f.value - prev_f.value,
+            rel.pct_change = CASE WHEN prev_f.value <> 0 THEN (f.value - prev_f.value) / abs(prev_f.value) ELSE null END
         """
         
-        params = {
+        # Process in chunks to avoid memory issues with massive queries
+        chunk_size = 500
+        for i in range(0, len(facts_data), chunk_size):
+            batch = facts_data[i:i + chunk_size]
+            try:
+                with self.driver.session() as session:
+                    session.run(query, {"batch": batch})
+                logger.info(f"Ingested batch of {len(batch)} financial facts")
+            except Exception as e:
+                logger.error(f"Error ingesting batch facts: {e}")
+
+    def ingest_financial_fact(self, ticker: str, quarter: str, metric: str, value: float, unit: str = "USD"):
+        """
+        Wrapper for single fact ingestion using the batch method.
+        """
+        # Calculate previous quarter logic here or in wrapper
+        try:
+            year, q_part = quarter.split("-")
+            q_num = int(q_part.replace("Q", ""))
+            
+            if q_num == 1:
+                prev_year = int(year) - 1
+                prev_q_num = 4
+            else:
+                prev_year = int(year)
+                prev_q_num = q_num - 1
+            
+            prev_quarter = f"{prev_year}-Q{prev_q_num}"
+            prev_fact_id = f"{ticker}_{prev_quarter}_{metric}"
+        except:
+            prev_fact_id = None
+
+        fact_data = {
             "ticker": ticker,
-            "quarter": quarter,  # e.g., "2024-Q1"
-            "fact_id": fact_id,
+            "quarter": quarter,
             "metric": metric,
             "value": value,
-            "unit": unit
+            "unit": unit,
+            "fact_id": f"{ticker}_{quarter}_{metric}",
+            "prev_fact_id": prev_fact_id
         }
-
-        try:
-            with self.driver.session() as session:
-                session.run(query, params)
-        except Exception as e:
-            logger.error(f"Error ingesting fact {fact_id}: {e}")
+        self.ingest_financial_facts_batch([fact_data])
 
     def ingest_transcript_reason(self, ticker: str, quarter: str, metric: str, reason_text: str, sentiment: str = "NEUTRAL"):
         """
         Ingest a 'Reason' extracted from transcript and link to the relevant Fact.
         
-        Path: (:Fact)-[:HAS_REASON]->(:Reason)
+        Path: (:Fact)-[:EXPLAINED_BY]->(:Reason)
         """
         if not self.driver:
             return
@@ -156,8 +230,8 @@ class Neo4jHandler:
 
         query = """
         MATCH (f:Fact {id: $fact_id})
-        CREATE (r:Reason {text: $text, sentiment: $sentiment, created_at: datetime()})
-        MERGE (f)-[:HAS_REASON]->(r)
+        CREATE (r:Reason {content: $text, sentiment: $sentiment, created_at: datetime()})
+        MERGE (f)-[:EXPLAINED_BY]->(r)
         """
         
         params = {
@@ -191,15 +265,15 @@ class Neo4jHandler:
         if not self.driver: return
 
         query = """
-        MERGE (c:Company {ticker: $ticker})
+        MERGE (t:Ticker {symbol: $ticker})
         MERGE (q:Quarter {id: $quarter})
         
         // Store transcript
-        MERGE (t:Transcript {id: $ticker + "_" + $quarter})
-        SET t.content = $transcript,
-            t.created_at = datetime()
-        MERGE (c)-[:HAS_TRANSCRIPT]->(t)
-        MERGE (t)-[:IN_QUARTER]->(q)
+        MERGE (tr:Transcript {id: $ticker + "_" + $quarter})
+        SET tr.content = $transcript,
+            tr.created_at = datetime()
+        MERGE (t)-[:HAS_TRANSCRIPT]->(tr)
+        MERGE (tr)-[:IN_QUARTER]->(q)
         
         // Store economic context
         MERGE (ec:EconomicContext {id: $quarter})
@@ -212,11 +286,11 @@ class Neo4jHandler:
             ec.created_at = datetime()
         MERGE (q)-[:HAS_ECONOMIC_CONTEXT]->(ec)
         
-        // Store financial metrics
+        // Store financial metrics (snapshot node for easy RAG, separate from atomic Facts)
         MERGE (fm:FinancialMetrics {id: $ticker + "_" + $quarter})
         SET fm.data = $financial_metrics,
             fm.created_at = datetime()
-        MERGE (c)-[:HAS_METRICS]->(fm)
+        MERGE (t)-[:HAS_METRICS]->(fm)
         MERGE (fm)-[:IN_QUARTER]->(q)
         """
         
@@ -251,12 +325,12 @@ class Neo4jHandler:
     ):
         """
         Ingest the LLM-generated analysis and its embedding vector.
-        Path: (:Company)-[:HAS_SUMMARY]->(:Summary)-[:IN_QUARTER]->(:Quarter)
+        Path: (:Ticker)-[:HAS_SUMMARY]->(:Summary)-[:IN_QUARTER]->(:Quarter)
         """
         if not self.driver: return
 
         query = """
-        MERGE (c:Company {ticker: $ticker})
+        MERGE (t:Ticker {symbol: $ticker})
         MERGE (q:Quarter {id: $quarter})
         MERGE (s:Summary {id: $ticker + "_" + $quarter})
         SET s.text = $text,
@@ -264,7 +338,7 @@ class Neo4jHandler:
             s.created_at = datetime(),
             s.max_quarter = $max_quarter,
             s.generated_for_date = $generated_for_date
-        MERGE (c)-[:HAS_SUMMARY]->(s)
+        MERGE (t)-[:HAS_SUMMARY]->(s)
         MERGE (s)-[:IN_QUARTER]->(q)
         """
         
@@ -292,14 +366,14 @@ class Neo4jHandler:
         if not self.driver: return None
         
         query = """
-        MATCH (c:Company {ticker: $ticker})
+        MATCH (t:Ticker {symbol: $ticker})
         MATCH (q:Quarter {id: $quarter})
         
-        OPTIONAL MATCH (c)-[:HAS_TRANSCRIPT]->(t:Transcript)-[:IN_QUARTER]->(q)
+        OPTIONAL MATCH (t)-[:HAS_TRANSCRIPT]->(tr:Transcript)-[:IN_QUARTER]->(q)
         OPTIONAL MATCH (q)-[:HAS_ECONOMIC_CONTEXT]->(ec:EconomicContext)
-        OPTIONAL MATCH (c)-[:HAS_METRICS]->(fm:FinancialMetrics)-[:IN_QUARTER]->(q)
+        OPTIONAL MATCH (t)-[:HAS_METRICS]->(fm:FinancialMetrics)-[:IN_QUARTER]->(q)
         
-        RETURN t.content as transcript,
+        RETURN tr.content as transcript,
                ec.cpi as cpi,
                ec.inflation as inflation,
                ec.unemployment as unemployment,
@@ -369,13 +443,14 @@ class Neo4jHandler:
             return "Graph Database unavailable."
 
         query = """
-        MATCH (c:Company {ticker: $ticker})-[:REPORTED]->(f:Fact)-[:IN_QUARTER]->(q:Quarter)
-        WHERE f.metric = $metric
-        OPTIONAL MATCH (f)-[:HAS_REASON]->(r:Reason)
-        WITH f, q, r
+        MATCH (t:Ticker {symbol: $ticker})<-[:FOR_FIRM]-(f:Fact)-[:HAS_METRIC]->(m:Metric {name: $metric})
+        MATCH (f)-[:HAS_VALUE]->(v:Value)
+        MATCH (f)<-[:HAS_FACT]-(q:Quarter)
+        OPTIONAL MATCH (f)-[:EXPLAINED_BY]->(r:Reason)
+        WITH f, q, v, r
         ORDER BY q.id DESC
         LIMIT $limit
-        RETURN q.id as quarter, f.value as value, collect(r.text) as reasons
+        RETURN q.id as quarter, v.content as value, collect(r.content) as reasons
         """
         
         params = {
@@ -414,11 +489,13 @@ class Neo4jHandler:
             return ""
 
         query = """
-        MATCH (c:Company {ticker: $ticker})-[:REPORTED]->(f:Fact)-[:IN_QUARTER]->(q:Quarter)
-        OPTIONAL MATCH (f)-[:HAS_REASON]->(r:Reason)
+        MATCH (t:Ticker {symbol: $ticker})<-[:FOR_FIRM]-(f:Fact)-[:HAS_METRIC]->(m:Metric)
+        MATCH (f)-[:HAS_VALUE]->(v:Value)
+        MATCH (f)<-[:HAS_FACT]-(q:Quarter)
+        OPTIONAL MATCH (f)-[:EXPLAINED_BY]->(r:Reason)
         {quarter_filter}
-        RETURN q.id as quarter, f.metric as metric, f.value as value, collect(r.text) as reasons
-        ORDER BY q.id DESC, f.metric
+        RETURN q.id as quarter, m.name as metric, v.content as value, collect(r.content) as reasons
+        ORDER BY q.id DESC, m.name
         LIMIT 20
         """
         quarter_filter = ""

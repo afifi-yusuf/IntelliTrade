@@ -11,11 +11,13 @@ Single entry point for all operations:
 
 import argparse
 import sys
+import os
 from typing import Optional
 
 # Core imports
 from backtest import Backtester
-from main import fetch_financial_metrics
+from llm import fetch_financial_metrics
+from llm import main as run_main_agent
 
 
 def collect_data(ticker: str, api_key: Optional[str] = None):
@@ -30,7 +32,6 @@ def collect_data(ticker: str, api_key: Optional[str] = None):
     print(f"\nOr manually run the individual fetch functions in data.py")
     print(f"\n⚠️  Note: You need an Alpha Vantage API key (set in .env)")
 
-
 def run_backtest(
     ticker: str = 'NVDA',
     method: str = 'qlearning',
@@ -42,7 +43,8 @@ def run_backtest(
     save_model: bool = True,
     use_confidence_sizing: bool = True,
     model_path: Optional[str] = None,
-    start_date: Optional[str] = None
+    start_date: Optional[str] = None,
+    read_only: bool = False
 ):
     """Run backtest with specified method"""
     
@@ -58,11 +60,6 @@ def run_backtest(
     
     if method in ['qlearning', 'dqn']:
         print(f"  Learning Enabled: {enable_learning}")
-        print(f"  Learning Rate: {learning_rate}")
-        print(f"  Discount Factor: {discount_factor}")
-        print(f"  Exploration (ε): {epsilon}")
-    
-    print()
     
     # Initialize backtester
     backtester = Backtester(
@@ -73,7 +70,8 @@ def run_backtest(
         discount_factor=discount_factor,
         epsilon=epsilon,
         use_confidence_sizing=use_confidence_sizing,
-        start_date=start_date
+        start_date=start_date,
+        read_only=read_only
     )
     
     # For DQN, replace the RL agent
@@ -93,8 +91,11 @@ def run_backtest(
             enable_learning=enable_learning
         )
         if model_path:
-            backtester.rl_agent.load_model(model_path)
-            print(f"🧠 Loaded DQN Agent from {model_path}")
+            try:
+                backtester.rl_agent.load_model(model_path)
+                print(f"🧠 Loaded DQN Agent from {model_path}")
+            except:
+                print(f"⚠️ Could not load model from {model_path}, using fresh agent")
         else:
             print(f"🧠 Initialized Fresh DQN Agent (state_dim={state_dim})")
             
@@ -138,27 +139,7 @@ def run_backtest(
     
     print(f"Final Portfolio Value: ${metrics.final_portfolio_value:,.2f}")
     print(f"Total Return: {metrics.total_return_pct:.2f}%")
-    print(f"Annualized Return: {metrics.annualized_return_pct:.2f}%")
     print(f"Sharpe Ratio: {metrics.sharpe_ratio:.2f}")
-    print(f"Max Drawdown: {metrics.max_drawdown_pct:.2f}%")
-    print(f"Win Rate: {metrics.win_rate:.2f}%")
-    print(f"Total Trades: {metrics.total_trades}")
-    
-    if method == 'qlearning' and hasattr(backtester.rl_agent, 'get_learning_stats'):
-        stats = backtester.rl_agent.get_learning_stats()
-        print(f"\n🧠 Q-Learning Statistics:")
-        print(f"   Total Updates: {stats['total_updates']}")
-        print(f"   Q-Table Size: {stats['q_table_size']} states")
-        print(f"   Final Exploration Rate: {stats['exploration_rate']:.3f}")
-    
-    elif method == 'dqn' and hasattr(backtester.rl_agent, 'get_learning_stats'):
-        stats = backtester.rl_agent.get_learning_stats()
-        print(f"\n🧠 DQN Statistics:")
-        print(f"   Training Steps: {stats['training_steps']}")
-        print(f"   Network Parameters: {stats['network_params']:,}")
-        print(f"   Buffer Size: {stats['buffer_size']}")
-        print(f"   Final Exploration Rate: {stats['exploration_rate']:.3f}")
-        print(f"   Average Loss: {stats['avg_loss']:.4f}")
     
     # Save model if requested
     if save_model and enable_learning:
@@ -176,17 +157,15 @@ def run_backtest(
     
     return metrics
 
+def run_training(method: str, epochs: int, cutoff: str):
+    """Run training for specified method"""
+    train_agent(method=method, epochs=epochs, train_cutoff_date=cutoff)
 
-def compare_methods(
-    ticker: str = 'NVDA',
-    initial_capital: float = 10000.0,
-    learning_rate: float = 0.1,
-    epsilon: float = 0.1
-):
-    """Compare all three methods: Fixed Q-table, Q-learning, DQN"""
+def compare_methods(ticker: str = 'NVDA', initial_capital: float = 10000.0):
+    """Compare all three methods: Fixed Q-table, Q-learning, DQN using BEST available models"""
     
     print(f"\n{'='*80}")
-    print(f"🔬 COMPARING ALL METHODS")
+    print(f"🔬 COMPARING ALL METHODS FOR {ticker}")
     print(f"{'='*80}\n")
     
     results = {}
@@ -195,82 +174,94 @@ def compare_methods(
     print(f"\n{'─'*80}")
     print("1/3: Fixed Q-table (Baseline)")
     print(f"{'─'*80}")
-    metrics_fixed = run_backtest(
-        ticker=ticker,
-        method='fixed',
-        initial_capital=initial_capital,
-        enable_learning=False,
-        save_model=False
-    )
-    results['Fixed Q-table'] = metrics_fixed
+    try:
+        results['Fixed Q-table'] = run_backtest(
+            ticker=ticker,
+            method='fixed',
+            initial_capital=initial_capital,
+            enable_learning=False,
+            save_model=False,
+            use_confidence_sizing=True,
+            start_date='2024-01-01',
+            read_only=True
+        )
+    except Exception as e:
+        print(f"❌ Failed: {e}")
     
     # 2. Q-learning
     print(f"\n{'─'*80}")
-    print("2/3: Q-learning")
+    print("2/3: Q-learning (Pre-trained)")
     print(f"{'─'*80}")
-    metrics_qlearning = run_backtest(
-        ticker=ticker,
-        method='qlearning',
-        initial_capital=initial_capital,
-        learning_rate=learning_rate,
-        epsilon=epsilon,
-        enable_learning=True,
-        save_model=True
-    )
-    results['Q-learning'] = metrics_qlearning
+    # Try to find best model
+    q_model = 'backtest_results/q_table_walkforward_final.json'
+    if not os.path.exists(q_model):
+        print("⚠️ No pre-trained Q-table found at default path. Using untrained agent.")
+        q_model = None
+    else:
+        print(f"📂 Loading: {q_model}")
+
+    try:
+        results['Q-learning'] = run_backtest(
+            ticker=ticker,
+            method='qlearning',
+            initial_capital=initial_capital,
+            model_path=q_model,
+            enable_learning=False, # Testing mode
+            save_model=False,
+            use_confidence_sizing=True,
+            start_date='2024-01-01',
+            read_only=True
+        )
+    except Exception as e:
+        print(f"❌ Failed: {e}")
     
     # 3. DQN
     print(f"\n{'─'*80}")
-    print("3/3: Deep Q-Network (DQN)")
+    print("3/3: Deep Q-Network (DQN) (Pre-trained)")
     print(f"{'─'*80}")
-    metrics_dqn = run_backtest(
-        ticker=ticker,
-        method='dqn',
-        initial_capital=initial_capital,
-        learning_rate=0.001,  # DQN typically needs smaller LR
-        epsilon=epsilon,
-        enable_learning=True,
-        save_model=True
-    )
-    results['DQN'] = metrics_dqn
+    dqn_model = 'backtest_results/dqn_model_walkforward_final.pth'
+    if not os.path.exists(dqn_model):
+        print("⚠️ No pre-trained DQN model found at default path. Using untrained agent.")
+        dqn_model = None
+    else:
+        print(f"📂 Loading: {dqn_model}")
+        
+    try:
+        results['DQN'] = run_backtest(
+            ticker=ticker,
+            method='dqn',
+            initial_capital=initial_capital,
+            model_path=dqn_model,
+            enable_learning=False, # Testing mode
+            save_model=False,
+            use_confidence_sizing=True,
+            start_date='2024-01-01',
+            read_only=True
+        )
+    except Exception as e:
+        print(f"❌ Failed: {e}")
     
     # Print comparison table
     print(f"\n{'='*80}")
-    print("📊 COMPARISON SUMMARY")
+    print("📊 COMPARISON SUMMARY (2024-Present)")
     print(f"{'='*80}\n")
     
-    print(f"{'Method':<20} | {'Final Value':<15} | {'Return':<12} | {'Sharpe':<8} | {'Win Rate':<8} | {'Complexity':<15}")
-    print(f"{'-'*20}-+-{'-'*15}-+-{'-'*12}-+-{'-'*8}-+-{'-'*8}-+-{'-'*15}")
+    print(f"{'Method':<20} | {'Final Value':<15} | {'Return':<12} | {'Sharpe':<8} | {'Win Rate':<8} | {'Max DD':<10}")
+    print(f"{'-'*20}-+-{'-'*15}-+-{'-'*12}-+-{'-'*8}-+-{'-'*8}-+-{'-'*10}")
     
     for name, metrics in results.items():
-        complexity = "6 states" if name == "Fixed Q-table" else \
-                    f"{results['Q-learning'].total_trades} states" if name == "Q-learning" and hasattr(results['Q-learning'], 'total_trades') else \
-                    "142,979 weights"
-        
-        print(f"{name:<20} | ${metrics.final_portfolio_value:>14,.2f} | {metrics.total_return_pct:>11.2f}% | {metrics.sharpe_ratio:>8.2f} | {metrics.win_rate:>7.2f}% | {complexity:<15}")
+        if metrics:
+            print(f"{name:<20} | ${metrics.final_portfolio_value:>14,.2f} | {metrics.total_return_pct:>11.2f}% | {metrics.sharpe_ratio:>8.2f} | {metrics.win_rate:>7.2f}% | {metrics.max_drawdown_pct:>9.2f}%")
     
     print(f"\n{'='*80}\n")
     
     # Winner
-    best_method = max(results.items(), key=lambda x: x[1].sharpe_ratio)
-    print(f"🏆 BEST METHOD (by Sharpe Ratio): {best_method[0]}")
-    print(f"   Return: {best_method[1].total_return_pct:.2f}%")
-    print(f"   Sharpe: {best_method[1].sharpe_ratio:.2f}")
-    print(f"   Max Drawdown: {best_method[1].max_drawdown_pct:.2f}%")
-    
-    print(f"\n{'='*80}\n")
-
-
-def run_rag_pipeline(ticker: str = 'NVDA'):
-    """Run the RAG pipeline to generate LLM analysis"""
-    print(f"\n{'='*80}")
-    print(f"🤖 RUNNING RAG PIPELINE FOR {ticker}")
-    print(f"{'='*80}\n")
-    
-    from main import main as run_main
-    run_main()
-    
-    print(f"\n✅ RAG pipeline complete!")
+    if results:
+        best_method = max(results.items(), key=lambda x: x[1].sharpe_ratio if x[1] else -999)
+        if best_method[1]:
+            print(f"🏆 BEST METHOD (by Sharpe Ratio): {best_method[0]}")
+            print(f"   Return: {best_method[1].total_return_pct:.2f}%")
+            print(f"   Sharpe: {best_method[1].sharpe_ratio:.2f}")
 
 
 def main():
@@ -281,23 +272,14 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Collect data for a stock
+  # Collect data
   python run.py collect --ticker NVDA
   
-  # Run RAG pipeline (LLM analysis)
-  python run.py rag --ticker NVDA
-  
-  # Backtest with Q-learning
-  python run.py backtest --method qlearning --ticker NVDA
-  
-  # Backtest with DQN
-  python run.py backtest --method dqn --ticker NVDA --learning-rate 0.001
+  # Train Agents
+  python run.py train --method dqn --epochs 50
   
   # Compare all methods
   python run.py compare --ticker NVDA
-  
-  # Quick start (collect data + compare all methods)
-  python run.py quickstart --ticker NVDA
         """
     )
     
@@ -312,40 +294,33 @@ Examples:
     parser_rag = subparsers.add_parser('rag', help='Run RAG pipeline (LLM analysis)')
     parser_rag.add_argument('--ticker', default='NVDA', help='Stock ticker (default: NVDA)')
     
+    # Train
+    parser_train = subparsers.add_parser('train', help='Train RL Agent')
+    parser_train.add_argument('--method', choices=['dqn', 'qlearning'], default='dqn', help='RL Method')
+    parser_train.add_argument('--epochs', type=int, default=50, help='Number of epochs')
+    parser_train.add_argument('--cutoff', type=str, default="2024-01-01", help='Training Cutoff Date')
+
     # Backtest
     parser_backtest = subparsers.add_parser('backtest', help='Run backtest')
     parser_backtest.add_argument('--ticker', default='NVDA', help='Stock ticker (default: NVDA)')
-    parser_backtest.add_argument('--method', choices=['fixed', 'qlearning', 'dqn'], default='qlearning',
-                                help='RL method (default: qlearning)')
-    parser_backtest.add_argument('--capital', type=float, default=10000.0,
-                                help='Initial capital (default: 10000)')
-    parser_backtest.add_argument('--learning-rate', type=float, default=0.1,
-                                help='Learning rate (default: 0.1)')
-    parser_backtest.add_argument('--epsilon', type=float, default=0.1,
-                                help='Exploration rate (default: 0.1)')
-    parser_backtest.add_argument('--no-learning', action='store_true',
-                                help='Disable learning (evaluation mode)')
-    parser_backtest.add_argument('--no-save', action='store_true',
-                                help='Do not save trained model')
-    parser_backtest.add_argument('--no-confidence-sizing', action='store_true',
-                                help='Disable confidence-weighted position sizing (use all-in/all-out)')
-    parser_backtest.add_argument('--load-model', help='Path to pre-trained model (for DQN)')
-    parser_backtest.add_argument('--start-date', help='Start date for backtest (YYYY-MM-DD)')
+    parser_backtest.add_argument('--method', choices=['fixed', 'qlearning', 'dqn'], default='qlearning')
+    parser_backtest.add_argument('--capital', type=float, default=10000.0)
+    parser_backtest.add_argument('--learning-rate', type=float, default=0.1)
+    parser_backtest.add_argument('--epsilon', type=float, default=0.1)
+    parser_backtest.add_argument('--no-learning', action='store_true')
+    parser_backtest.add_argument('--no-save', action='store_true')
+    parser_backtest.add_argument('--no-confidence-sizing', action='store_true')
+    parser_backtest.add_argument('--load-model', help='Path to pre-trained model')
+    parser_backtest.add_argument('--start-date', help='Start date (YYYY-MM-DD)')
     
     # Compare methods
     parser_compare = subparsers.add_parser('compare', help='Compare all methods')
-    parser_compare.add_argument('--ticker', default='NVDA', help='Stock ticker (default: NVDA)')
-    parser_compare.add_argument('--capital', type=float, default=10000.0,
-                               help='Initial capital (default: 10000)')
-    parser_compare.add_argument('--learning-rate', type=float, default=0.1,
-                               help='Learning rate for Q-learning (default: 0.1)')
-    parser_compare.add_argument('--epsilon', type=float, default=0.1,
-                               help='Exploration rate (default: 0.1)')
+    parser_compare.add_argument('--ticker', default='NVDA', help='Stock ticker')
+    parser_compare.add_argument('--capital', type=float, default=10000.0)
     
     # Quickstart
-    parser_quickstart = subparsers.add_parser('quickstart', help='Collect data + compare methods')
-    parser_quickstart.add_argument('--ticker', default='NVDA', help='Stock ticker (default: NVDA)')
-    parser_quickstart.add_argument('--api-key', help='Alpha Vantage API key')
+    parser_quickstart = subparsers.add_parser('quickstart', help='Compare methods')
+    parser_quickstart.add_argument('--ticker', default='NVDA')
     
     args = parser.parse_args()
     
@@ -359,6 +334,9 @@ Examples:
     
     elif args.command == 'rag':
         run_rag_pipeline(args.ticker)
+        
+    elif args.command == 'train':
+        run_training(args.method, args.epochs, args.cutoff)
     
     elif args.command == 'backtest':
         run_backtest(
@@ -374,22 +352,8 @@ Examples:
             start_date=args.start_date
         )
     
-    elif args.command == 'compare':
-        compare_methods(
-            ticker=args.ticker,
-            initial_capital=args.capital,
-            learning_rate=args.learning_rate,
-            epsilon=args.epsilon
-        )
-    
-    elif args.command == 'quickstart':
-        print("\n🚀 QUICKSTART MODE\n")
-        print("Assuming data already exists in data/ folder...")
-        print("(If not, run: ./venv/bin/python data.py first)\n")
-        
-        # Compare all methods
-        compare_methods(ticker=args.ticker)
-
+    elif args.command == 'compare' or args.command == 'quickstart':
+        compare_methods(args.ticker, args.capital)
 
 if __name__ == "__main__":
     main()

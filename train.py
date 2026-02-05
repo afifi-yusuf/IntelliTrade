@@ -5,17 +5,18 @@ import logging
 import random
 import numpy as np
 import contextlib
-import io
+import argparse
 from datetime import datetime
 from data import TICKERS
-from main import fetch_financial_metrics
+from llm import fetch_financial_metrics
 from backtest import Backtester
 from dqn_agent import DQNAgent
+from rl_agent import MarkovRLAgent
 from vectorizer import NarrativeVectorizer
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("train_dqn")
+logger = logging.getLogger("train")
 
 # Suppress other loggers
 logging.getLogger("backtest").setLevel(logging.WARNING)
@@ -32,17 +33,15 @@ def suppress_stdout():
         finally:
             sys.stdout = old_stdout
 
-def train_dqn(epochs=50, save_freq=5, train_cutoff_date="2024-01-01"):
+def train_agent(method='dqn', epochs=50, save_freq=5, train_cutoff_date="2024-01-01"):
     """
-    Pre-train Deep Q-Network on all available tickers using a STRICT Time-Series Split.
+    Unified training loop for RL agents (DQN or Q-Learning).
     
     METHODOLOGY (SOTA):
-    - Training Set: All data BEFORE train_cutoff_date (e.g., 2020-2023)
-    - Test/Trade Set: All data AFTER train_cutoff_date (e.g., 2024-2025)
-    
-    This ensures NO data leakage. The model learns from the past and is tested on the future.
+    - Strict Time-Series Split: Train on data BEFORE cutoff, Test on data AFTER.
+    - Read-Only Graph: Ensures no accidental data corruption during training.
     """
-    print(f"🚀 INITIALIZING DQN PRE-TRAINING (WALK-FORWARD)")
+    print(f"🚀 INITIALIZING {method.upper()} PRE-TRAINING (WALK-FORWARD)")
     print(f"================================================================================")
     print(f"   Target Tickers: {', '.join(TICKERS)}")
     print(f"   Method: Strict Time-Series Split")
@@ -54,20 +53,31 @@ def train_dqn(epochs=50, save_freq=5, train_cutoff_date="2024-01-01"):
     print("⏳ Initializing Vectorizer (this takes a moment)...")
     vectorizer = NarrativeVectorizer(model_name='all-MiniLM-L6-v2')
     state_dim = vectorizer.embedding_dim + 7 + 3 + 2
-    print(f"   ✅ Vectorizer Loop initialized. State Dim: {state_dim}")
+    print(f"   ✅ Vectorizer initialized. Dim: {vectorizer.embedding_dim}")
 
     # 2. Initialize Agent
-    agent = DQNAgent(
-        state_dim=state_dim,
-        learning_rate=0.0005,
-        epsilon=1.0,           
-        epsilon_decay=0.995,
-        epsilon_min=0.05,
-        buffer_size=50000,
-        batch_size=64,
-        enable_learning=True
-    )
-    print(f"   ✅ DQN Agent initialized.")
+    agent = None
+    if method == 'dqn':
+        agent = DQNAgent(
+            state_dim=state_dim,
+            learning_rate=0.0005,
+            epsilon=1.0,           
+            epsilon_decay=0.995,
+            epsilon_min=0.05,
+            buffer_size=50000,
+            batch_size=64,
+            enable_learning=True
+        )
+    elif method == 'qlearning':
+        agent = MarkovRLAgent(
+            narrative_dim=vectorizer.embedding_dim,
+            learning_rate=0.1,
+            discount_factor=0.95,
+            epsilon=1.0, 
+            enable_learning=True
+        )
+    
+    print(f"   ✅ {method.upper()} Agent initialized.")
 
     # 3. Pre-load Financial Data
     print("⏳ Pre-loading financial data & filtering dates...")
@@ -90,8 +100,21 @@ def train_dqn(epochs=50, save_freq=5, train_cutoff_date="2024-01-01"):
     print(f"================================================================================")
 
     # 4. Training Loop
+    # For Q-learning manual epsilon decay
+    epsilon_start = 1.0
+    epsilon_end = 0.1
+    epsilon_decay_q = (epsilon_end / epsilon_start) ** (1 / epochs)
+    current_epsilon = epsilon_start
+
     for epoch in range(1, epochs + 1):
-        print(f"\n⚡ EPOCH {epoch}/{epochs}")
+        # Handle Q-learning epsilon manually
+        if method == 'qlearning':
+            agent.epsilon = current_epsilon
+            display_epsilon = current_epsilon
+        else:
+            display_epsilon = agent.epsilon if hasattr(agent, 'epsilon') else 0.0
+
+        print(f"\n⚡ EPOCH {epoch}/{epochs} (ε={display_epsilon:.3f})")
         random.shuffle(valid_tickers) 
         
         epoch_rewards = []
@@ -104,13 +127,14 @@ def train_dqn(epochs=50, save_freq=5, train_cutoff_date="2024-01-01"):
             print(f"\r   Processing: [{bar}] {ticker:<5}", end="")
             
             try:
-                # Create fresh backtester
+                # Create fresh backtester with READ_ONLY=True
                 with suppress_stdout():
                     backtester = Backtester(
                         ticker=ticker,
                         initial_capital=10000.0,
                         enable_learning=True,
-                        transaction_cost_pct=0.001
+                        epsilon=display_epsilon, # Passed to backtester but agent might override
+                        read_only=True # CRITICAL: Do not write to graph during training
                     )
                     
                     # INJECT SHARED RESOURCES
@@ -126,7 +150,6 @@ def train_dqn(epochs=50, save_freq=5, train_cutoff_date="2024-01-01"):
                     filtered_len = len(backtester.price_data)
                     
                     if filtered_len < 50:
-                        # Skip if not enough history
                         continue
                         
                     # Run backtest on the PAST data (Training Phase)
@@ -134,33 +157,48 @@ def train_dqn(epochs=50, save_freq=5, train_cutoff_date="2024-01-01"):
                     epoch_rewards.append(metrics.total_return_pct)
                     
             except Exception as e:
-                # print(f"Error: {e}")
                 pass
+
+        # Decay epsilon for Q-learning
+        if method == 'qlearning':
+            current_epsilon *= epsilon_decay_q
+            current_epsilon = max(current_epsilon, epsilon_end)
 
         # End of epoch stats
         stats = agent.get_learning_stats()
         avg_return = np.mean(epoch_rewards) if epoch_rewards else 0.0
         
         print(f"\r   Processing: [{'█'*progress_bar_length}] DONE!")
-        print(f"   📊 Stats | Loss: {stats['avg_loss']:.4f} | Eps: {stats['exploration_rate']:.3f} | Buffer: {stats['buffer_size']} | Avg Return (Train): {avg_return:>6.2f}%")
+        
+        if method == 'dqn':
+            print(f"   📊 Stats | Loss: {stats['avg_loss']:.4f} | Eps: {stats['exploration_rate']:.3f} | Buffer: {stats['buffer_size']} | Avg Ret: {avg_return:>6.2f}%")
+        else:
+            print(f"   📊 Stats | Q-Table Size: {stats['q_table_size']} | Eps: {display_epsilon:.3f} | Avg Ret: {avg_return:>6.2f}%")
         
         # Save Checkpoint
         if epoch % save_freq == 0:
-            checkpoint_path = f"{results_dir}/dqn_model_walkforward_epoch_{epoch}.pth"
-            agent.save_model(checkpoint_path)
+            if method == 'dqn':
+                path = f"{results_dir}/dqn_model_walkforward_epoch_{epoch}.pth"
+                agent.save_model(path)
+            else:
+                path = f"{results_dir}/q_table_walkforward_epoch_{epoch}.json"
+                agent.save_q_table(path)
 
     # Final Save
-    final_path = f"{results_dir}/dqn_model_walkforward_final.pth"
-    agent.save_model(final_path)
-    print(f"\n✅ TRAINING COMPLETE! Model saved to {final_path}")
-    print(f"   To TEST this model on the FUTURE (2024-Present), run:")
-    print(f"   python run.py backtest --method dqn --ticker NVDA --no-learning")
+    if method == 'dqn':
+        final_path = f"{results_dir}/dqn_model_walkforward_final.pth"
+        agent.save_model(final_path)
+        print(f"\n✅ TRAINING COMPLETE! Model saved to {final_path}")
+    else:
+        final_path = f"{results_dir}/q_table_walkforward_final.json"
+        agent.save_q_table(final_path)
+        print(f"\n✅ TRAINING COMPLETE! Q-Table saved to {final_path}")
 
 if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser(description='Train DQN Agent')
+    parser = argparse.ArgumentParser(description='Train RL Agent')
+    parser.add_argument('--method', choices=['dqn', 'qlearning'], default='dqn', help='RL Method')
     parser.add_argument('--epochs', type=int, default=50, help='Number of epochs')
     parser.add_argument('--cutoff', type=str, default="2024-01-01", help='Training Data Cutoff Date')
     args = parser.parse_args()
     
-    train_dqn(epochs=args.epochs, train_cutoff_date=args.cutoff)
+    train_agent(method=args.method, epochs=args.epochs, train_cutoff_date=args.cutoff)

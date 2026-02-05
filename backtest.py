@@ -20,7 +20,7 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
-from main import (
+from llm import (
     fetch_stock_price_history,
     get_economic_data_for_quarter,
     load_earnings_transcript,
@@ -177,7 +177,8 @@ class Backtester:
         epsilon: float = 0.1,  # ε exploration rate
 
         use_confidence_sizing: bool = True,  # Weight position size by confidence
-        start_date: Optional[str] = None  # Start date for backtest (YYYY-MM-DD)
+        start_date: Optional[str] = None,  # Start date for backtest (YYYY-MM-DD)
+        read_only: bool = False # Prevent writing to graph
     ):
         self.ticker = ticker
         self.initial_capital = initial_capital
@@ -189,6 +190,7 @@ class Backtester:
         self.epsilon = epsilon
         self.use_confidence_sizing = use_confidence_sizing
         self.start_date = start_date
+        self.read_only = read_only
         
         self.portfolio = Portfolio(initial_capital, transaction_cost_pct)
         self.vectorizer: Optional[NarrativeVectorizer] = None
@@ -737,7 +739,7 @@ def print_performance_summary(metrics: PerformanceMetrics):
 
 if __name__ == "__main__":
     # Load financial data
-    from main import fetch_financial_metrics
+    from llm import fetch_financial_metrics
     
     ticker = "NVDA"
     financial_data = fetch_financial_metrics(ticker)

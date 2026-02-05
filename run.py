@@ -40,7 +40,9 @@ def run_backtest(
     epsilon: float = 0.1,
     enable_learning: bool = True,
     save_model: bool = True,
-    use_confidence_sizing: bool = True
+    use_confidence_sizing: bool = True,
+    model_path: Optional[str] = None,
+    start_date: Optional[str] = None
 ):
     """Run backtest with specified method"""
     
@@ -70,7 +72,8 @@ def run_backtest(
         learning_rate=learning_rate,
         discount_factor=discount_factor,
         epsilon=epsilon,
-        use_confidence_sizing=use_confidence_sizing
+        use_confidence_sizing=use_confidence_sizing,
+        start_date=start_date
     )
     
     # For DQN, replace the RL agent
@@ -89,7 +92,36 @@ def run_backtest(
             epsilon=epsilon,
             enable_learning=enable_learning
         )
-        print(f"🧠 Using DQN Agent (state_dim={state_dim})")
+        if model_path:
+            backtester.rl_agent.load_model(model_path)
+            print(f"🧠 Loaded DQN Agent from {model_path}")
+        else:
+            print(f"🧠 Initialized Fresh DQN Agent (state_dim={state_dim})")
+            
+    elif method == 'qlearning':
+        if model_path:
+            from rl_agent import MarkovRLAgent
+            from vectorizer import NarrativeVectorizer
+            print("⏳ Initializing Vectorizer for Q-Learning...")
+            vectorizer = NarrativeVectorizer(model_name='all-MiniLM-L6-v2')
+            backtester.vectorizer = vectorizer
+            
+            backtester.rl_agent = MarkovRLAgent(
+                narrative_dim=vectorizer.embedding_dim,
+                learning_rate=learning_rate,
+                discount_factor=discount_factor,
+                epsilon=epsilon,
+                enable_learning=enable_learning
+            )
+            try:
+                # Basic JSON load or specific method
+                if hasattr(backtester.rl_agent, 'load_q_table'):
+                    backtester.rl_agent.load_q_table(model_path)
+                    print(f"🧠 Loaded Q-Table form {model_path}")
+                else:
+                    print(f"⚠️ Agent does not support loading Q-Table")
+            except Exception as e:
+                print(f"⚠️ Failed to load Q-table: {e}")
     
     # Fetch financial data
     print(f"📈 Fetching financial metrics for {ticker}...")
@@ -297,6 +329,8 @@ Examples:
                                 help='Do not save trained model')
     parser_backtest.add_argument('--no-confidence-sizing', action='store_true',
                                 help='Disable confidence-weighted position sizing (use all-in/all-out)')
+    parser_backtest.add_argument('--load-model', help='Path to pre-trained model (for DQN)')
+    parser_backtest.add_argument('--start-date', help='Start date for backtest (YYYY-MM-DD)')
     
     # Compare methods
     parser_compare = subparsers.add_parser('compare', help='Compare all methods')
@@ -335,7 +369,9 @@ Examples:
             epsilon=args.epsilon,
             enable_learning=not args.no_learning,
             save_model=not args.no_save,
-            use_confidence_sizing=not args.no_confidence_sizing
+            use_confidence_sizing=not args.no_confidence_sizing,
+            model_path=args.load_model,
+            start_date=args.start_date
         )
     
     elif args.command == 'compare':

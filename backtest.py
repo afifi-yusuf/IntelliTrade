@@ -175,7 +175,9 @@ class Backtester:
         learning_rate: float = 0.1,  # α
         discount_factor: float = 0.95,  # γ
         epsilon: float = 0.1,  # ε exploration rate
-        use_confidence_sizing: bool = True  # Weight position size by confidence
+
+        use_confidence_sizing: bool = True,  # Weight position size by confidence
+        start_date: Optional[str] = None  # Start date for backtest (YYYY-MM-DD)
     ):
         self.ticker = ticker
         self.initial_capital = initial_capital
@@ -186,6 +188,7 @@ class Backtester:
         self.discount_factor = discount_factor
         self.epsilon = epsilon
         self.use_confidence_sizing = use_confidence_sizing
+        self.start_date = start_date
         
         self.portfolio = Portfolio(initial_capital, transaction_cost_pct)
         self.vectorizer: Optional[NarrativeVectorizer] = None
@@ -217,6 +220,17 @@ class Backtester:
         self.price_data['timestamp'] = pd.to_datetime(self.price_data['timestamp'])
         self.price_data = self.price_data.sort_values('timestamp').reset_index(drop=True)
         
+        # Filter by start_date if provided
+        if self.start_date:
+            try:
+                cutoff = pd.to_datetime(self.start_date)
+                self.price_data = self.price_data[self.price_data['timestamp'] >= cutoff]
+                if self.price_data.empty:
+                    raise ValueError(f"No price data available after {self.start_date}")
+                logger.info(f"🗓️  Filtered backtest to start from: {self.start_date}")
+            except Exception as e:
+                logger.error(f"Failed to filter by start_date: {e}")
+                
         logger.info(f"📊 Loaded {len(self.price_data)} days of price data")
         logger.info(f"   Date range: {self.price_data['timestamp'].min()} to {self.price_data['timestamp'].max()}")
         

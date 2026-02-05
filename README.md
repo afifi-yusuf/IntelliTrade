@@ -66,7 +66,23 @@ Backtests write to `backtest_results/`:
 ## Limitations (for research rigor)
 - No walk‑forward validation or multi‑asset splits.  
 - Macro data lacks release calendars and revisions.  
-- DQN is sensitive to reward scaling and data volume.
+- **DQN**: neural approximation, sensitive to data volume.
+
+## SOTA DQN Workflow (Walk-Forward)
+To train a robust agent without data leakage:
+
+1. **Train on Past (2020-2023)**:
+```bash
+python train_dqn.py --epochs 50 --cutoff 2024-01-01
+```
+This saves the "brain" to `backtest_results/dqn_model_walkforward_final.pth`.
+
+2. **Test on Future (2024-Present)**:
+```bash
+python run.py backtest --method dqn --ticker NVDA --no-learning --load-model backtest_results/dqn_model_walkforward_final.pth --start-date 2024-01-01
+```
+
+## Limitations (for research rigor)
 
 ## Project Map
 ```

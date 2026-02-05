@@ -368,9 +368,19 @@ class DQNAgent:
         
         # Calculate reward
         if hasattr(self, 'last_portfolio_value') and hasattr(self, 'last_state') and hasattr(self, 'last_action_idx'):
-            reward = (current_portfolio_value - self.last_portfolio_value) / self.last_portfolio_value * 100
-            reward = np.clip(reward, -10, 10)  # Clip reward
-            self.reward_history.append(float(reward))
+            # Calculate basic return
+            raw_reward = (current_portfolio_value - self.last_portfolio_value) / self.last_portfolio_value * 100
+            
+            # Risk-Adjustment (Volatility Penalty)
+            # We use the standard deviation of recent rewards as a proxy for volatility
+            self.reward_history.append(float(raw_reward))
+            volatility = np.std(self.reward_history[-20:]) if len(self.reward_history) >= 20 else 0.0
+            
+            # Reward = Return - (Penalty_Factor * Volatility)
+            # This penalizes erratic returns, encouraging stable growth (Sharpe-like behavior)
+            reward = raw_reward - (0.1 * volatility)
+            
+            reward = np.clip(reward, -10, 10)  # Clip result
             
             # Store experience
             if hasattr(self, 'current_state'):

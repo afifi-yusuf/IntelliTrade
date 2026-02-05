@@ -83,7 +83,7 @@ load_dotenv()
 # Configuration
 ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
 BASE_URL = "https://www.alphavantage.co/query"
-TICKERS = ["NVDA", "AAPL", "MSFT", "AMZN", "GOOGL", "META", "TSLA", "ASML", "TSM"]
+TICKERS = ["SPY", "NVDA", "AAPL", "MSFT", "AMZN", "GOOGL", "META", "TSLA", "ASML", "TSM"]
 OUTPUT_DIR = "data"  # Directory to save CSV files
 
 # Create output directory if it doesn't exist

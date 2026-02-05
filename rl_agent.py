@@ -431,7 +431,8 @@ class MarkovRLAgent:
             return {
                 'total_updates': 0,
                 'avg_reward': 0.0,
-                'q_table_size': len(self.q_table)
+                'q_table_size': len(self.q_table),
+                'exploration_rate': self.epsilon
             }
         
         rewards = [h['reward'] for h in self.learning_history]

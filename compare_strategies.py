@@ -72,12 +72,12 @@ def compare_strategies(ticker='NVDA'):
     print("🏆 FINAL SCOREBOARD")
     print(f"{'='*80}\n")
     
-    print(f"{'Strategy':<20} | {'Return':<10} | {'Sharpe':<8} | {'Win Rate':<8} | {'Max DD':<10} | {'Trades':<6}")
-    print(f"{'-'*20}-+-{'-'*10}-+-{'-'*8}-+-{'-'*8}-+-{'-'*10}-+-{'-'*6}")
+    print(f"{'Ticker':<8} | {'Strategy':<20} | {'Return':<10} | {'Sharpe':<8} | {'Win Rate':<8} | {'Max DD':<10} | {'Trades':<6}")
+    print(f"{'-'*8}-+-{'-'*20}-+-{'-'*10}-+-{'-'*8}-+-{'-'*8}-+-{'-'*10}-+-{'-'*6}")
 
     for name, m in results.items():
         if m:
-            print(f"{name:<20} | {m.total_return_pct:>9.2f}% | {m.sharpe_ratio:>8.2f} | {m.win_rate:>7.2f}% | {m.max_drawdown_pct:>9.2f}% | {m.total_trades:>6}")
+            print(f"{ticker:<8} | {name:<20} | {m.total_return_pct:>9.2f}% | {m.sharpe_ratio:>8.2f} | {m.win_rate:>7.2f}% | {m.max_drawdown_pct:>9.2f}% | {m.total_trades:>6}")
 
     print(f"\n{'='*80}\n")
     

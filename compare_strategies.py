@@ -20,11 +20,11 @@ def compare_strategies(ticker='NVDA'):
 
     results = {}
 
-    # 1. Hardcoded Priors (Baseline)
-    print("\n🥊 ROUND 1: Hardcoded Financial Priors (Baseline)")
+    # 1. Fixed Q (Baseline)
+    print("\n🥊 ROUND 1: Fixed Q (Baseline)")
     print("--------------------------------------------------------------------------------")
     try:
-        results['Hardcoded'] = run_backtest(
+        results['Fixed Q'] = run_backtest(
             ticker=ticker,
             method='fixed',
             start_date='2024-01-01',

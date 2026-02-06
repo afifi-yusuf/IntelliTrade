@@ -86,62 +86,62 @@
   {
     "date": "2024-02-20T00:00:00",
     "action": "BUY",
-    "shares": 5.0,
+    "shares": 11.0,
     "price": 891.616828456186,
-    "value": 4458.08414228093,
-    "cash": 5537.457773576789,
-    "portfolio_value": 9995.541915857719,
-    "confidence": 0.5000000000000001,
+    "value": 9807.785113018046,
+    "cash": 182.40710186893557,
+    "portfolio_value": 9990.192214886982,
+    "confidence": 1.0,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-02-26T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 928.886386398845,
     "value": 0.0,
-    "cash": 5537.457773576789,
-    "portfolio_value": 10181.889705571015,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 10400.15735225623,
+    "confidence": 0.9,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-03-04T00:00:00",
     "action": "BUY",
-    "shares": 2.0,
+    "shares": 0.0,
     "price": 978.340599923493,
-    "value": 1956.681199846986,
-    "cash": 3578.8198925299557,
-    "portfolio_value": 10427.204091994407,
-    "confidence": 0.5000000000000001,
+    "value": 0.0,
+    "cash": 182.40710186893557,
+    "portfolio_value": 10944.153701027359,
+    "confidence": 1.0,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-03-11T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 943.668736051009,
     "value": 0.0,
-    "cash": 3578.8198925299557,
-    "portfolio_value": 10184.50104488702,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 10562.763198430035,
+    "confidence": 0.8,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-03-18T00:00:00",
     "action": "BUY",
-    "shares": 2.0,
+    "shares": 0.0,
     "price": 922.759749440885,
-    "value": 1845.51949888177,
-    "cash": 1731.454874149304,
-    "portfolio_value": 10036.292619117268,
-    "confidence": 0.55,
+    "value": 0.0,
+    "cash": 182.40710186893557,
+    "portfolio_value": 10332.764345718671,
+    "confidence": 1.0,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-03-25T00:00:00",
@@ -149,11 +149,11 @@
     "shares": 0.0,
     "price": 959.607794760836,
     "value": 0.0,
-    "cash": 1731.454874149304,
-    "portfolio_value": 10367.925026996827,
-    "confidence": 0.55,
+    "cash": 182.40710186893557,
+    "portfolio_value": 10738.092844238132,
+    "confidence": 1.0,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-04-01T00:00:00",
@@ -161,131 +161,131 @@
     "shares": 0.0,
     "price": 973.351066784931,
     "value": 0.0,
-    "cash": 1731.454874149304,
-    "portfolio_value": 10491.614475213682,
-    "confidence": 0.55,
+    "cash": 182.40710186893557,
+    "portfolio_value": 10889.268836503177,
+    "confidence": 1.0,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-04-08T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 963.31318479301,
     "value": 0.0,
-    "cash": 1731.454874149304,
-    "portfolio_value": 10401.273537286394,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 10778.852134592045,
+    "confidence": 0.9,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-04-15T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 935.973680031812,
     "value": 0.0,
-    "cash": 1731.454874149304,
-    "portfolio_value": 10155.217994435612,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 10478.117582218867,
+    "confidence": 0.9,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-04-22T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 854.837401470164,
     "value": 0.0,
-    "cash": 1731.454874149304,
-    "portfolio_value": 9424.99148738078,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 9585.61851804074,
+    "confidence": 0.7999999999999999,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-04-29T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 893.630724607829,
     "value": 0.0,
-    "cash": 1731.454874149304,
-    "portfolio_value": 9774.131395619765,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 10012.345072555056,
+    "confidence": 0.9,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-05-06T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 900.653883956836,
     "value": 0.0,
-    "cash": 1731.454874149304,
-    "portfolio_value": 9837.339829760827,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 10089.599825394132,
+    "confidence": 0.8,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-05-13T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 900.968207172456,
     "value": 0.0,
-    "cash": 1731.454874149304,
-    "portfolio_value": 9840.168738701408,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 10093.057380765951,
+    "confidence": 0.8,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-05-20T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 922.774380256086,
     "value": 0.0,
-    "cash": 1731.454874149304,
-    "portfolio_value": 10036.424296454077,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 10332.925284685882,
+    "confidence": 0.8,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-05-28T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 974.25462941433,
     "value": 0.0,
-    "cash": 1731.454874149304,
-    "portfolio_value": 10499.746538878273,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 10899.208025426566,
+    "confidence": 0.9,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-06-03T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 948.352431927154,
     "value": 0.0,
-    "cash": 1731.454874149304,
-    "portfolio_value": 10266.62676149369,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 10614.28385306763,
+    "confidence": 0.9,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-06-10T00:00:00",
     "action": "BUY",
-    "shares": 1.0,
+    "shares": 0.0,
     "price": 1023.2301154481,
-    "value": 1023.2301154481,
-    "cash": 707.2015285857558,
-    "portfolio_value": 10939.502683066756,
-    "confidence": 0.6000000000000001,
+    "value": 0.0,
+    "cash": 182.40710186893557,
+    "portfolio_value": 11437.938371798036,
+    "confidence": 1.0,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-06-17T00:00:00",
@@ -293,11 +293,11 @@
     "shares": 0.0,
     "price": 1033.79923357332,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 11045.193864318955,
-    "confidence": 0.55,
+    "cash": 182.40710186893557,
+    "portfolio_value": 11554.198671175454,
+    "confidence": 1.0,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-06-24T00:00:00",
@@ -305,11 +305,11 @@
     "shares": 0.0,
     "price": 984.234391510262,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 10549.545443688376,
-    "confidence": 0.7500000000000001,
+    "cash": 182.40710186893557,
+    "portfolio_value": 11008.985408481818,
+    "confidence": 1.0,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-07-01T00:00:00",
@@ -317,11 +317,11 @@
     "shares": 0.0,
     "price": 1015.15593784687,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 10858.760907054455,
-    "confidence": 0.55,
+    "cash": 182.40710186893557,
+    "portfolio_value": 11349.122418184505,
+    "confidence": 1.0,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-07-08T00:00:00",
@@ -329,11 +329,11 @@
     "shares": 0.0,
     "price": 1058.27715398972,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 11289.973068482957,
-    "confidence": 0.55,
+    "cash": 182.40710186893557,
+    "portfolio_value": 11823.455795755857,
+    "confidence": 1.0,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-07-15T00:00:00",
@@ -341,83 +341,83 @@
     "shares": 0.0,
     "price": 1044.76125571807,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 11154.814085766457,
-    "confidence": 0.55,
+    "cash": 182.40710186893557,
+    "portfolio_value": 11674.780914767707,
+    "confidence": 1.0,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-07-22T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 924.562093544924,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 9952.822464034996,
-    "confidence": 0.6,
+    "cash": 182.40710186893557,
+    "portfolio_value": 10352.5901308631,
+    "confidence": 0.85,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-07-29T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 856.720680580112,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 9274.408334386877,
-    "confidence": 0.6,
+    "cash": 182.40710186893557,
+    "portfolio_value": 9606.334588250167,
+    "confidence": 0.7999999999999999,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-08-05T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 807.318144062828,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 8780.382969214035,
-    "confidence": 0.6,
+    "cash": 182.40710186893557,
+    "portfolio_value": 9062.906686560043,
+    "confidence": 0.7,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-08-12T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 839.311699086272,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 9100.318519448476,
+    "cash": 182.40710186893557,
+    "portfolio_value": 9414.835791817928,
     "confidence": 0.6,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-08-19T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 918.326234085729,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 9890.463869443045,
-    "confidence": 0.6,
+    "cash": 182.40710186893557,
+    "portfolio_value": 10283.995676811954,
+    "confidence": 0.8,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-08-26T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 869.277978706816,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 9399.981315653917,
-    "confidence": 0.6,
+    "cash": 182.40710186893557,
+    "portfolio_value": 9744.464867643912,
+    "confidence": 0.8,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-09-03T00:00:00",
@@ -425,59 +425,59 @@
     "shares": 0.0,
     "price": 831.960365465075,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 9026.805183236505,
-    "confidence": 0.5000000000000001,
+    "cash": 182.40710186893557,
+    "portfolio_value": 9333.971121984761,
+    "confidence": 1.0,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-09-09T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 737.908564370317,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 8086.287172288926,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 8299.401309942423,
+    "confidence": 0.7,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-09-16T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 790.283125992824,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 8610.032788513996,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 8875.52148779,
+    "confidence": 0.8,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-09-23T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 790.73581855852,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 8614.559714170955,
+    "cash": 182.40710186893557,
+    "portfolio_value": 8880.501106012656,
     "confidence": 0.6,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-09-30T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 820.013218187787,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 8907.333710463625,
-    "confidence": 0.6,
+    "cash": 182.40710186893557,
+    "portfolio_value": 9202.552501934591,
+    "confidence": 0.8,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-10-07T00:00:00",
@@ -485,167 +485,167 @@
     "shares": 0.0,
     "price": 804.267389815744,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 8749.875426743196,
-    "confidence": 0.5000000000000001,
+    "cash": 182.40710186893557,
+    "portfolio_value": 9029.34838984212,
+    "confidence": 1.0,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-10-14T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 858.413357130106,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 9291.335099886815,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 9624.954030300101,
+    "confidence": 0.9,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-10-21T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 702.756002529732,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 7734.761553883076,
+    "cash": 182.40710186893557,
+    "portfolio_value": 7912.723129695987,
     "confidence": 0.6,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-10-28T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 697.392579740505,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 7681.127325990806,
+    "cash": 182.40710186893557,
+    "portfolio_value": 7853.725479014491,
     "confidence": 0.6,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-11-04T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 662.014080914549,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 7327.3423377312465,
-    "confidence": 0.6,
+    "cash": 182.40710186893557,
+    "portfolio_value": 7464.561991928975,
+    "confidence": 0.7,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-11-11T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 662.162036859684,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 7328.821897182596,
+    "cash": 182.40710186893557,
+    "portfolio_value": 7466.18950732546,
     "confidence": 0.6,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-11-18T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 656.164889216856,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 7268.850420754316,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 7400.220883254351,
+    "confidence": 0.8,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-11-25T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 675.142705112911,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 7458.628579714867,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 7608.9768581109565,
+    "confidence": 0.8,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-12-02T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 701.774775237311,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 7724.949280958866,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 7901.929629479357,
+    "confidence": 0.8,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-12-09T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 696.892229047838,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 7676.123819064136,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 7848.221621395153,
+    "confidence": 0.65,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-12-16T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 712.536104313504,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 7832.562571720796,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 8020.30424931748,
+    "confidence": 0.9500000000000001,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-12-23T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 711.21436453696,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 7819.345173955357,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 8005.765111775496,
+    "confidence": 0.9,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2024-12-30T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 686.663541374133,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 7573.836942327087,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 7735.706056984399,
+    "confidence": 0.9,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-01-06T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 758.037489307527,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 8287.576421661026,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 8520.819484251733,
+    "confidence": 0.9,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-01-13T00:00:00",
@@ -653,11 +653,11 @@
     "shares": 0.0,
     "price": 717.497560340384,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 7882.177131989596,
-    "confidence": 0.55,
+    "cash": 182.40710186893557,
+    "portfolio_value": 8074.880265613159,
+    "confidence": 1.0,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-01-21T00:00:00",
@@ -665,11 +665,11 @@
     "shares": 0.0,
     "price": 752.602574256214,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 8233.227271147896,
-    "confidence": 0.55,
+    "cash": 182.40710186893557,
+    "portfolio_value": 8461.03541868729,
+    "confidence": 1.0,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-01-27T00:00:00",
@@ -677,11 +677,11 @@
     "shares": 0.0,
     "price": 680.74530356871,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 7514.654564272856,
-    "confidence": 0.55,
+    "cash": 182.40710186893557,
+    "portfolio_value": 7670.605441124746,
+    "confidence": 1.0,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-02-03T00:00:00",
@@ -689,191 +689,191 @@
     "shares": 0.0,
     "price": 721.092889807178,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 7918.130426657536,
-    "confidence": 0.6000000000000001,
+    "cash": 182.40710186893557,
+    "portfolio_value": 8114.428889747894,
+    "confidence": 1.0,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-02-10T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 735.269718748955,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 8059.898716075306,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 8270.374008107441,
+    "confidence": 0.9,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-02-18T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 736.941875901326,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 8076.620287599016,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 8288.76773678352,
+    "confidence": 0.9,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-02-24T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 728.762654844454,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 7994.828077030296,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 8198.79630515793,
+    "confidence": 0.9,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-03-03T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 693.015695988151,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 7637.358488467266,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 7805.5797577385965,
+    "confidence": 0.9,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-03-10T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 676.429503167014,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 7471.496560255896,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 7623.13163670609,
+    "confidence": 0.9,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-03-17T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 723.187713615618,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 7939.078664741936,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 8137.471951640734,
+    "confidence": 0.9,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-03-24T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 720.722064652954,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 7914.422175115296,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 8110.34981305143,
+    "confidence": 0.9,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-03-31T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 656.149788004213,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 7268.6994086278855,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 7400.054769915278,
+    "confidence": 0.7,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-04-07T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 609.81737235639,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 6805.375252149656,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 6890.398197789225,
+    "confidence": 0.7,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-04-14T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 666.289645585613,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 7370.097984441886,
-    "confidence": 0.6,
+    "cash": 182.40710186893557,
+    "portfolio_value": 7511.593203310678,
+    "confidence": 0.8,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-04-21T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 618.580823488752,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 6893.009763473276,
+    "cash": 182.40710186893557,
+    "portfolio_value": 6986.796160245208,
     "confidence": 0.6,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-04-28T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 669.860567904324,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 7405.8072076289955,
-    "confidence": 0.6,
+    "cash": 182.40710186893557,
+    "portfolio_value": 7550.873348816499,
+    "confidence": 0.8,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-05-05T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 680.414884480497,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 7511.3503733907255,
-    "confidence": 0.6,
+    "cash": 182.40710186893557,
+    "portfolio_value": 7666.970831154403,
+    "confidence": 1.0,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-05-12T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 746.966820324966,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 8176.869731835415,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 8399.04212544356,
+    "confidence": 0.75,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-05-19T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 745.901431764918,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 8166.215846234936,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 8387.322851283034,
+    "confidence": 0.9500000000000001,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-05-27T00:00:00",
@@ -881,11 +881,11 @@
     "shares": 0.0,
     "price": 753.528419026567,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 8242.485718851425,
-    "confidence": 0.55,
+    "cash": 182.40710186893557,
+    "portfolio_value": 8471.219711161173,
+    "confidence": 1.0,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-06-02T00:00:00",
@@ -893,11 +893,11 @@
     "shares": 0.0,
     "price": 743.312637133027,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 8140.327899916027,
-    "confidence": 0.55,
+    "cash": 182.40710186893557,
+    "portfolio_value": 8358.846110332233,
+    "confidence": 1.0,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-06-09T00:00:00",
@@ -905,11 +905,11 @@
     "shares": 0.0,
     "price": 766.880625185669,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 8376.007780442445,
-    "confidence": 0.55,
+    "cash": 182.40710186893557,
+    "portfolio_value": 8618.093978911294,
+    "confidence": 1.0,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-06-16T00:00:00",
@@ -917,11 +917,11 @@
     "shares": 0.0,
     "price": 771.888947108135,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 8426.090999667105,
-    "confidence": 0.55,
+    "cash": 182.40710186893557,
+    "portfolio_value": 8673.18552005842,
+    "confidence": 1.0,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-06-23T00:00:00",
@@ -929,11 +929,11 @@
     "shares": 0.0,
     "price": 776.359596299363,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 8470.797491579386,
-    "confidence": 0.55,
+    "cash": 182.40710186893557,
+    "portfolio_value": 8722.36266116193,
+    "confidence": 1.0,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-06-30T00:00:00",
@@ -941,11 +941,11 @@
     "shares": 0.0,
     "price": 797.936203865935,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 8686.563567245106,
-    "confidence": 0.7500000000000001,
+    "cash": 182.40710186893557,
+    "portfolio_value": 8959.70534439422,
+    "confidence": 1.0,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-07-07T00:00:00",
@@ -953,11 +953,11 @@
     "shares": 0.0,
     "price": 781.706452904462,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 8524.266057630375,
-    "confidence": 0.55,
+    "cash": 182.40710186893557,
+    "portfolio_value": 8781.178083818018,
+    "confidence": 1.0,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-07-14T00:00:00",
@@ -965,95 +965,95 @@
     "shares": 0.0,
     "price": 803.253189763742,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 8739.733426223174,
-    "confidence": 0.55,
+    "cash": 182.40710186893557,
+    "portfolio_value": 9018.192189270098,
+    "confidence": 1.0,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-07-21T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 716.578354107533,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 7872.985069661086,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 8064.768997051799,
+    "confidence": 0.85,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-07-28T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 726.843920513225,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 7975.640733718006,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 8177.690227514411,
+    "confidence": 0.7,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-08-04T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 698.144725907025,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 7688.648787656006,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 7861.99908684621,
+    "confidence": 0.7999999999999999,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-08-11T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 720.056583510632,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 7907.767363692075,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 8103.029520485888,
+    "confidence": 0.8,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-08-18T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 746.250986404421,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 8169.711392629966,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 8391.167952317566,
+    "confidence": 0.8,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-08-25T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 753.14897893476,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 8238.691317933355,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 8467.045870151294,
+    "confidence": 0.8,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-09-02T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 724.588694377164,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 7953.088472357395,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 8152.882740017739,
+    "confidence": 0.9,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-09-08T00:00:00",
@@ -1061,11 +1061,11 @@
     "shares": 0.0,
     "price": 794.866360677574,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 8655.865135361495,
-    "confidence": 0.6000000000000001,
+    "cash": 182.40710186893557,
+    "portfolio_value": 8925.93706932225,
+    "confidence": 1.0,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-09-15T00:00:00",
@@ -1073,11 +1073,11 @@
     "shares": 0.0,
     "price": 865.792897476496,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 9365.130503350716,
-    "confidence": 0.6000000000000001,
+    "cash": 182.40710186893557,
+    "portfolio_value": 9706.128974110392,
+    "confidence": 1.0,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-09-22T00:00:00",
@@ -1085,11 +1085,11 @@
     "shares": 0.0,
     "price": 956.135636115517,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 10268.557889740925,
-    "confidence": 0.6000000000000001,
+    "cash": 182.40710186893557,
+    "portfolio_value": 10699.899099139622,
+    "confidence": 1.0,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-09-29T00:00:00",
@@ -1097,11 +1097,11 @@
     "shares": 0.0,
     "price": 960.937277804508,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 10316.574306630835,
-    "confidence": 0.6000000000000001,
+    "cash": 182.40710186893557,
+    "portfolio_value": 10752.717157718524,
+    "confidence": 1.0,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-10-06T00:00:00",
@@ -1109,11 +1109,11 @@
     "shares": 0.0,
     "price": 1041.48706322752,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 11122.072160860955,
-    "confidence": 0.6000000000000001,
+    "cash": 182.40710186893557,
+    "portfolio_value": 11638.764797371654,
+    "confidence": 1.0,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-10-13T00:00:00",
@@ -1121,11 +1121,11 @@
     "shares": 0.0,
     "price": 982.948961638656,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 10536.691144972316,
-    "confidence": 0.55,
+    "cash": 182.40710186893557,
+    "portfolio_value": 10994.845679894152,
+    "confidence": 1.0,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-10-20T00:00:00",
@@ -1133,11 +1133,11 @@
     "shares": 0.0,
     "price": 1040.33906157631,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 11110.592144348857,
-    "confidence": 0.7500000000000001,
+    "cash": 182.40710186893557,
+    "portfolio_value": 11626.136779208347,
+    "confidence": 1.0,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-10-27T00:00:00",
@@ -1145,11 +1145,11 @@
     "shares": 0.0,
     "price": 1058.13807848165,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 11288.582313402256,
-    "confidence": 0.55,
+    "cash": 182.40710186893557,
+    "portfolio_value": 11821.925965167085,
+    "confidence": 1.0,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-11-03T00:00:00",
@@ -1157,11 +1157,11 @@
     "shares": 0.0,
     "price": 1066.82,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 11375.401528585755,
-    "confidence": 0.55,
+    "cash": 182.40710186893557,
+    "portfolio_value": 11917.427101868934,
+    "confidence": 1.0,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-11-10T00:00:00",
@@ -1169,11 +1169,11 @@
     "shares": 0.0,
     "price": 1038.79,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 11095.101528585756,
-    "confidence": 0.55,
+    "cash": 182.40710186893557,
+    "portfolio_value": 11609.097101868934,
+    "confidence": 1.0,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-11-17T00:00:00",
@@ -1181,71 +1181,71 @@
     "shares": 0.0,
     "price": 1020.0,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 10907.201528585756,
-    "confidence": 0.55,
+    "cash": 182.40710186893557,
+    "portfolio_value": 11402.407101868936,
+    "confidence": 1.0,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-11-24T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 987.82,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 10585.401528585757,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 11048.427101868936,
+    "confidence": 0.85,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-12-01T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 1087.99,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 11587.101528585756,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 12150.297101868935,
+    "confidence": 0.9,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-12-08T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 1119.69,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 11904.101528585757,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 12498.997101868936,
+    "confidence": 0.9,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-12-15T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 1087.82,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 11585.401528585755,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 12148.427101868934,
+    "confidence": 0.9,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-12-22T00:00:00",
-    "action": "HOLD",
+    "action": "BUY",
     "shares": 0.0,
     "price": 1056.98,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 11277.001528585755,
-    "confidence": 0.5,
+    "cash": 182.40710186893557,
+    "portfolio_value": 11809.187101868936,
+    "confidence": 0.9,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2025-12-29T00:00:00",
@@ -1253,11 +1253,11 @@
     "shares": 0.0,
     "price": 1065.995,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 11367.151528585755,
-    "confidence": 0.55,
+    "cash": 182.40710186893557,
+    "portfolio_value": 11908.352101868935,
+    "confidence": 1.0,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2026-01-05T00:00:00",
@@ -1265,11 +1265,11 @@
     "shares": 0.0,
     "price": 1228.19,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 12989.101528585757,
-    "confidence": 0.6000000000000001,
+    "cash": 182.40710186893557,
+    "portfolio_value": 13692.497101868936,
+    "confidence": 1.0,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2026-01-12T00:00:00",
@@ -1277,11 +1277,11 @@
     "shares": 0.0,
     "price": 1281.23,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 13519.501528585755,
-    "confidence": 0.6000000000000001,
+    "cash": 182.40710186893557,
+    "portfolio_value": 14275.937101868936,
+    "confidence": 1.0,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2026-01-20T00:00:00",
@@ -1289,11 +1289,11 @@
     "shares": 0.0,
     "price": 1326.07,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 13967.901528585755,
-    "confidence": 0.6000000000000001,
+    "cash": 182.40710186893557,
+    "portfolio_value": 14769.177101868934,
+    "confidence": 1.0,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2026-01-26T00:00:00",
@@ -1301,11 +1301,11 @@
     "shares": 0.0,
     "price": 1413.35,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 14840.701528585756,
-    "confidence": 0.6000000000000001,
+    "cash": 182.40710186893557,
+    "portfolio_value": 15729.257101868934,
+    "confidence": 1.0,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   },
   {
     "date": "2026-02-02T00:00:00",
@@ -1313,10 +1313,10 @@
     "shares": 0.0,
     "price": 1441.39,
     "value": 0.0,
-    "cash": 707.2015285857558,
-    "portfolio_value": 15121.101528585757,
-    "confidence": 0.7500000000000001,
+    "cash": 182.40710186893557,
+    "portfolio_value": 16037.697101868936,
+    "confidence": 1.0,
     "narrative_state": 0,
-    "financial_state": 1
+    "financial_state": 0
   }
 ]

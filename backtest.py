@@ -48,6 +48,8 @@ class Trade:
     confidence: float
     narrative_state: int
     financial_state: int
+    rationale: str = ""
+    llm_analysis: str = ""
 
 
 @dataclass
@@ -90,6 +92,8 @@ class Portfolio:
         confidence: float,
         narrative_state: int,
         financial_state: int,
+        rationale: str = "",
+        llm_analysis: str = "",
         position_size_pct: float = 1.0
     ) -> bool:
         """
@@ -154,7 +158,10 @@ class Portfolio:
             portfolio_value=self.get_value(current_price),
             confidence=confidence,
             narrative_state=narrative_state,
-            financial_state=financial_state
+
+            financial_state=financial_state,
+            rationale=rationale,
+            llm_analysis=llm_analysis
         )
         self.trade_history.append(trade)
         
@@ -421,6 +428,9 @@ class Backtester:
                 narrative_state=narrative_state
             )
             
+            # Inject LLM analysis text into signal for logging
+            signal['llm_analysis'] = llm_analysis_text
+            
             return signal
             
         except Exception as e:
@@ -476,7 +486,7 @@ class Backtester:
             if len(price_history) < 30:  # Need minimum history
                 # Just hold for now
                 self.portfolio.execute_trade(
-                    "HOLD", current_price, date, 0.0, 1, 1
+                    "HOLD", current_price, date, 0.0, 1, 1, rationale="Insufficient history"
                 )
                 continue
             
@@ -504,6 +514,8 @@ class Backtester:
                 confidence=signal['confidence'],
                 narrative_state=signal.get('narrative_state', 1),
                 financial_state=signal.get('financial_state', 1),
+                rationale=signal.get('rationale', ""),
+                llm_analysis=signal.get('llm_analysis', ""),
                 position_size_pct=position_size
             )
             
@@ -662,7 +674,9 @@ class Backtester:
                 "portfolio_value": t.portfolio_value,
                 "confidence": t.confidence,
                 "narrative_state": t.narrative_state,
-                "financial_state": t.financial_state
+                "financial_state": t.financial_state,
+                "rationale": t.rationale,
+                "llm_analysis": t.llm_analysis
             })
 
         return PerformanceMetrics(
@@ -698,7 +712,9 @@ class Backtester:
                 'portfolio_value': t.portfolio_value,
                 'confidence': t.confidence,
                 'narrative_state': t.narrative_state,
-                'financial_state': t.financial_state
+                'financial_state': t.financial_state,
+                'rationale': t.rationale,
+                'llm_analysis': t.llm_analysis
             }
             for t in self.portfolio.trade_history
         ])

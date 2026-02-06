@@ -186,8 +186,17 @@ class MarkovRLAgent:
                 
         # 2. Profit Margin check (from basic financials)
         financials = metrics.get("financials", {}).get("metric", {})
-        margin = financials.get("netProfitMarginTTM", 0)
-        if margin > 15: # Healthy Tech Margin
+        margin = financials.get("netProfitMarginTTM")
+        
+        if margin is None:
+            # Fallback for CSV data which might use 'ProfitMargin'
+            margin = financials.get("ProfitMargin", 0)
+            # Normalize: If margin is a small ratio (e.g. 0.04), convert to percentage (4.0)
+            if margin < 1.0 and margin != 0:
+                margin *= 100
+        
+        # Lower threshold slightly to be more inclusive (e.g. 10% instead of 15%)
+        if margin > 10: 
             score += 1
         elif margin < 0:
             score -= 1

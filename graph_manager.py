@@ -24,7 +24,12 @@ class Neo4jHandler:
             logger.warning("NEO4J_PASSWORD not found in environment. Connection may fail.")
 
         try:
-            self.driver = GraphDatabase.driver(uri, auth=(username, password))
+            self.driver = GraphDatabase.driver(
+                uri, 
+                auth=(username, password),
+                max_connection_lifetime=200, # Refresh connections every 3 minutes (less than typical 5m timeouts)
+                keep_alive=True
+            )
             self.verify_connection()
             self.setup_constraints()
         except Exception as e:

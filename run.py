@@ -18,6 +18,7 @@ from typing import Optional
 from backtest import Backtester
 from llm import fetch_financial_metrics
 from llm import main as run_main_agent
+from train import train_agent
 
 
 def collect_data(ticker: str, api_key: Optional[str] = None):

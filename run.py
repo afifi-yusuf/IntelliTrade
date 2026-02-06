@@ -264,6 +264,31 @@ def compare_methods(ticker: str = 'NVDA', initial_capital: float = 10000.0):
             print(f"   Return: {best_method[1].total_return_pct:.2f}%")
             print(f"   Sharpe: {best_method[1].sharpe_ratio:.2f}")
 
+    # Save detailed history for graphing
+    print(f"\n{'='*80}")
+    print("💾 SAVING DETAILED HISTORY")
+    print(f"{'='*80}")
+    
+    results_dir = "test_results"
+    os.makedirs(results_dir, exist_ok=True)
+    
+    import json
+    
+    for name, metrics in results.items():
+        if metrics and metrics.history:
+            # Clean filename: "Fixed Q-table" -> "Fixed_Q_table"
+            safe_name = name.replace(" ", "_").replace("-", "_")
+            filename = f"{ticker}_{safe_name}_history.json"
+            filepath = os.path.join(results_dir, filename)
+            
+            try:
+                with open(filepath, 'w') as f:
+                    json.dump(metrics.history, f, indent=2)
+                print(f"✅ Saved history to {filepath}")
+            except Exception as e:
+                print(f"❌ Failed to save history for {name}: {e}")
+    print(f"{'='*80}\n")
+
 
 def main():
     """Main entry point with CLI"""

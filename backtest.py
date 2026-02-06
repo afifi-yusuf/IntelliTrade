@@ -65,6 +65,7 @@ class PerformanceMetrics:
     sell_trades: int
     hold_days: int
     avg_trade_size: float
+    history: List[Dict] = None
 
 
 class Portfolio:
@@ -644,11 +645,26 @@ class Backtester:
             if trades[i].portfolio_value > trades[i-1].portfolio_value:
                 winning_trades += 1
         win_rate = (winning_trades / len(trades) * 100) if len(trades) > 0 else 0
-        
         # Average trade size
         trade_values = [t.value for t in trades if t.value > 0]
         avg_trade_size = np.mean(trade_values) if trade_values else 0
         
+        # Prepare history for serialization
+        history = []
+        for t in self.portfolio.trade_history:
+            history.append({
+                "date": t.date.isoformat(),
+                "action": t.action,
+                "shares": t.shares,
+                "price": t.price,
+                "value": t.value,
+                "cash": t.cash_after,
+                "portfolio_value": t.portfolio_value,
+                "confidence": t.confidence,
+                "narrative_state": t.narrative_state,
+                "financial_state": t.financial_state
+            })
+
         return PerformanceMetrics(
             initial_capital=self.initial_capital,
             final_portfolio_value=final_value,
@@ -661,7 +677,8 @@ class Backtester:
             buy_trades=buy_trades,
             sell_trades=sell_trades,
             hold_days=hold_days,
-            avg_trade_size=avg_trade_size
+            avg_trade_size=avg_trade_size,
+            history=history
         )
     
     def export_results(self, metrics: PerformanceMetrics, output_dir: str = "backtest_results"):

@@ -1,4 +1,5 @@
 import os
+import time
 import neo4j
 from neo4j import GraphDatabase
 import logging
@@ -14,8 +15,23 @@ logging.getLogger("neo4j").setLevel(logging.ERROR)
 class Neo4jHandler:
     """
     Handles interactions with the Neo4j Graph Database for the Causal-Temporal Knowledge Graph.
+    Uses singleton pattern to share one driver across the entire application.
     """
+    _instance = None
+    _driver = None
+    
+    def __new__(cls):
+        """Singleton: reuse the same instance and driver connection."""
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
+    
     def __init__(self):
+        if self._initialized:
+            return  # Already initialized
+        self._initialized = True
+        
         uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
         username = os.getenv("NEO4J_USERNAME", "neo4j")
         password = os.getenv("NEO4J_PASSWORD")
@@ -27,9 +43,12 @@ class Neo4jHandler:
             self.driver = GraphDatabase.driver(
                 uri, 
                 auth=(username, password),
-                max_connection_lifetime=200, # Refresh connections every 3 minutes (less than typical 5m timeouts)
+                max_connection_lifetime=200,
+                max_connection_pool_size=5,  # Aura Free tier has limited connections
+                connection_acquisition_timeout=30,
                 keep_alive=True
             )
+            Neo4jHandler._driver = self.driver
             self.verify_connection()
             self.setup_constraints()
         except Exception as e:
@@ -51,6 +70,73 @@ class Neo4jHandler:
         except Exception as e:
             logger.error(f"Neo4j connection verification failed: {e}")
             raise
+
+    def _run_query(self, query: str, params: dict = None, single: bool = False, 
+                   retries: int = 3, backoff: float = 1.0):
+        """
+        Execute a Cypher query with automatic retry on transient failures.
+        
+        Args:
+            query: Cypher query string
+            params: Query parameters
+            single: If True, return single record; otherwise return list of records
+            retries: Number of retry attempts
+            backoff: Initial backoff in seconds (doubles each retry)
+        
+        Returns:
+            Single record dict, list of record dicts, or None on failure
+        """
+        if not self.driver:
+            return None
+        
+        for attempt in range(retries):
+            try:
+                with self.driver.session() as session:
+                    result = session.run(query, params or {})
+                    if single:
+                        record = result.single()
+                        return dict(record) if record else None
+                    else:
+                        return [dict(r) for r in result]
+            except (neo4j.exceptions.ServiceUnavailable, 
+                    neo4j.exceptions.SessionExpired,
+                    ConnectionResetError,
+                    OSError) as e:
+                wait = backoff * (2 ** attempt)
+                logger.warning(f"Neo4j transient error (attempt {attempt+1}/{retries}): {e}. Retrying in {wait:.1f}s...")
+                time.sleep(wait)
+            except Exception as e:
+                logger.error(f"Neo4j query error: {e}")
+                return None
+        
+        logger.error(f"Neo4j query failed after {retries} retries")
+        return None
+
+    def _write_query(self, query: str, params: dict = None, 
+                     retries: int = 3, backoff: float = 1.0) -> bool:
+        """
+        Execute a write query with retry. Returns True on success.
+        """
+        if not self.driver:
+            return False
+        
+        for attempt in range(retries):
+            try:
+                with self.driver.session() as session:
+                    session.run(query, params or {})
+                return True
+            except (neo4j.exceptions.ServiceUnavailable,
+                    neo4j.exceptions.SessionExpired,
+                    ConnectionResetError,
+                    OSError) as e:
+                wait = backoff * (2 ** attempt)
+                logger.warning(f"Neo4j write error (attempt {attempt+1}/{retries}): {e}. Retrying in {wait:.1f}s...")
+                time.sleep(wait)
+            except Exception as e:
+                logger.error(f"Neo4j write error: {e}")
+                return False
+        
+        return False
 
     def setup_constraints(self):
         """Create uniqueness constraints for the graph schema."""
@@ -358,8 +444,7 @@ class Neo4jHandler:
         }
         
         try:
-            with self.driver.session() as session:
-                session.run(query, params)
+            self._write_query(query, params)
             logger.info(f"Ingested LLM summary for {ticker} {quarter}")
         except Exception as e:
             logger.error(f"Error ingesting summary: {e}")
@@ -421,19 +506,14 @@ class Neo4jHandler:
                s.max_quarter as max_quarter,
                s.generated_for_date as generated_for_date
         """
-        try:
-            with self.driver.session() as session:
-                result = session.run(query, {"id": f"{ticker}_{quarter}"})
-                record = result.single()
-                if record:
-                    return {
-                        "text": record["text"],
-                        "embedding": record.get("embedding"),
-                        "max_quarter": record.get("max_quarter"),
-                        "generated_for_date": record.get("generated_for_date")
-                    }
-        except Exception as e:
-            logger.error(f"Error retrieving summary: {e}")
+        record = self._run_query(query, {"id": f"{ticker}_{quarter}"}, single=True)
+        if record:
+            return {
+                "text": record.get("text"),
+                "embedding": record.get("embedding"),
+                "max_quarter": record.get("max_quarter"),
+                "generated_for_date": record.get("generated_for_date")
+            }
         return None
 
     # =========================================================================

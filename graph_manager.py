@@ -61,7 +61,8 @@ class Neo4jHandler:
             "CREATE CONSTRAINT ticker_symbol IF NOT EXISTS FOR (t:Ticker) REQUIRE t.symbol IS UNIQUE",
             "CREATE CONSTRAINT quarter_id IF NOT EXISTS FOR (q:Quarter) REQUIRE q.id IS UNIQUE",
             "CREATE CONSTRAINT fact_id IF NOT EXISTS FOR (f:Fact) REQUIRE f.id IS UNIQUE",
-            "CREATE CONSTRAINT metric_name IF NOT EXISTS FOR (m:Metric) REQUIRE m.name IS UNIQUE"
+            "CREATE CONSTRAINT metric_name IF NOT EXISTS FOR (m:Metric) REQUIRE m.name IS UNIQUE",
+            "CREATE CONSTRAINT sector_name IF NOT EXISTS FOR (s:Sector) REQUIRE s.name IS UNIQUE"
         ]
         
         with self.driver.session() as session:
@@ -534,3 +535,268 @@ class Neo4jHandler:
             return f"Error: {e}"
             
         return "\n".join(output)
+
+    # =========================================================================
+    # MULTI-AGENT GRAPH METHODS
+    # =========================================================================
+
+    def setup_vector_index(self, embedding_dim: int = 384):
+        """
+        Create a Neo4j vector index on Fact.embedding for semantic search.
+        Requires Neo4j 5.x+ with vector index support.
+        """
+        if not self.driver:
+            return
+        
+        query = """
+        CREATE VECTOR INDEX fact_embedding_index IF NOT EXISTS
+        FOR (f:Fact) ON (f.embedding)
+        OPTIONS {indexConfig: {
+            `vector.dimensions`: $dim,
+            `vector.similarity_function`: 'cosine'
+        }}
+        """
+        try:
+            with self.driver.session() as session:
+                session.run(query, {"dim": embedding_dim})
+            logger.info(f"Vector index created/verified (dim={embedding_dim})")
+        except Exception as e:
+            logger.warning(f"Vector index creation failed (may not be supported): {e}")
+
+    def ingest_sector(self, ticker: str, sector_name: str):
+        """
+        Create Sector node and link Ticker to it.
+        Path: (:Ticker)-[:IN_SECTOR]->(:Sector)
+        """
+        if not self.driver or not sector_name:
+            return
+        
+        query = """
+        MERGE (t:Ticker {symbol: $ticker})
+        MERGE (s:Sector {name: $sector})
+        MERGE (t)-[:IN_SECTOR]->(s)
+        """
+        try:
+            with self.driver.session() as session:
+                session.run(query, {"ticker": ticker, "sector": sector_name})
+            logger.info(f"Linked {ticker} to sector {sector_name}")
+        except Exception as e:
+            logger.error(f"Error ingesting sector for {ticker}: {e}")
+
+    def setup_temporal_edges(self):
+        """
+        Create NEXT_QUARTER relationships between consecutive Quarter nodes.
+        Enables temporal graph traversal.
+        """
+        if not self.driver:
+            return
+        
+        query = """
+        MATCH (q:Quarter)
+        WITH q ORDER BY q.id
+        WITH collect(q) AS quarters
+        UNWIND range(0, size(quarters)-2) AS i
+        WITH quarters[i] AS current, quarters[i+1] AS next
+        MERGE (current)-[:NEXT_QUARTER]->(next)
+        """
+        try:
+            with self.driver.session() as session:
+                session.run(query)
+            logger.info("Temporal NEXT_QUARTER edges created/verified")
+        except Exception as e:
+            logger.error(f"Error creating temporal edges: {e}")
+
+    def ingest_fact_with_embedding(self, fact_data: Dict[str, Any], embedding: list):
+        """
+        Ingest a structured fact with its embedding vector for vector search.
+        
+        Args:
+            fact_data: Dict with keys: ticker, quarter, fact_id, metric, value, 
+                       change, sentiment, context, category
+            embedding: List[float] embedding vector
+        """
+        if not self.driver or not fact_data:
+            return
+        
+        query = """
+        MERGE (t:Ticker {symbol: $ticker})
+        MERGE (q:Quarter {id: $quarter})
+        MERGE (t)-[:REPORTS_IN]->(q)
+        
+        MERGE (m:Metric {name: $metric})
+        
+        MERGE (f:Fact {id: $fact_id})
+        SET f.ticker = $ticker,
+            f.quarter = $quarter,
+            f.metric_name = $metric,
+            f.value = $value,
+            f.change = $change,
+            f.sentiment = $sentiment,
+            f.context = $context,
+            f.category = $category,
+            f.embedding = $embedding,
+            f.source = 'transcript_extraction',
+            f.created_at = datetime()
+        
+        MERGE (q)-[:HAS_FACT]->(f)
+        MERGE (f)-[:FOR_FIRM]->(t)
+        MERGE (f)-[:HAS_METRIC]->(m)
+        
+        MERGE (v:Value {id: $fact_id + "_val"})
+        SET v.content = $value
+        MERGE (f)-[:HAS_VALUE]->(v)
+        """
+        
+        params = {
+            "ticker": fact_data.get("ticker"),
+            "quarter": fact_data.get("quarter"),
+            "fact_id": fact_data.get("fact_id"),
+            "metric": fact_data.get("metric", "Unknown"),
+            "value": str(fact_data.get("value", "")),
+            "change": str(fact_data.get("change", "")),
+            "sentiment": str(fact_data.get("sentiment", "neutral")),
+            "context": str(fact_data.get("context", ""))[:500],
+            "category": str(fact_data.get("category", "operational")),
+            "embedding": embedding
+        }
+        
+        try:
+            with self.driver.session() as session:
+                session.run(query, params)
+        except Exception as e:
+            logger.error(f"Error ingesting fact with embedding: {e}")
+
+    def search_peer_facts(self, query_embedding: list, exclude_ticker: str,
+                          peer_tickers: List[str], top_k: int = 10) -> List[Dict]:
+        """
+        Vector search for semantically similar facts across peer companies.
+        Uses the fact_embedding_index.
+        """
+        if not self.driver or not peer_tickers:
+            return []
+        
+        query = """
+        CALL db.index.vector.queryNodes('fact_embedding_index', $topK, $vec)
+        YIELD node, score
+        WHERE node.ticker IN $peers AND node.ticker <> $exclude AND score > 0.3
+        OPTIONAL MATCH (node)-[:HAS_VALUE]->(v:Value)
+        RETURN node.ticker AS ticker, node.metric_name AS metric,
+               v.content AS value, node.quarter AS quarter,
+               node.sentiment AS sentiment, node.change AS change, score
+        ORDER BY score DESC
+        LIMIT $topK
+        """
+        
+        try:
+            with self.driver.session() as session:
+                result = session.run(query, {
+                    "topK": top_k,
+                    "vec": query_embedding,
+                    "peers": peer_tickers,
+                    "exclude": exclude_ticker
+                })
+                return [dict(r) for r in result]
+        except Exception as e:
+            logger.warning(f"Vector peer search failed: {e}")
+            return []
+
+    def search_historical_facts(self, query_embedding: list, ticker: str,
+                                 max_quarter: str = None, top_k: int = 10) -> List[Dict]:
+        """
+        Vector search for semantically similar facts from the same company's history.
+        """
+        if not self.driver:
+            return []
+        
+        # Build quarter filter
+        quarter_clause = ""
+        params = {
+            "topK": top_k,
+            "vec": query_embedding,
+            "ticker": ticker
+        }
+        if max_quarter:
+            quarter_clause = "AND node.quarter < $max_quarter"
+            params["max_quarter"] = max_quarter
+        
+        query = f"""
+        CALL db.index.vector.queryNodes('fact_embedding_index', $topK, $vec)
+        YIELD node, score
+        WHERE node.ticker = $ticker {quarter_clause} AND score > 0.3
+        OPTIONAL MATCH (node)-[:HAS_VALUE]->(v:Value)
+        RETURN node.metric_name AS metric, v.content AS value,
+               node.quarter AS quarter, node.sentiment AS sentiment,
+               node.change AS change, score
+        ORDER BY score DESC
+        LIMIT $topK
+        """
+        
+        try:
+            with self.driver.session() as session:
+                result = session.run(query, params)
+                return [dict(r) for r in result]
+        except Exception as e:
+            logger.warning(f"Vector historical search failed: {e}")
+            return []
+
+    def get_metric_trend(self, ticker: str, metric: str, 
+                         num_quarters: int = 4) -> List[Dict]:
+        """
+        Traverse QoQ_COMPARES edges to get a metric's trend over N quarters.
+        Returns: [{"quarter": "2024-Q1", "value": "100.0"}, ...] oldest to newest.
+        """
+        if not self.driver:
+            return []
+        
+        query = """
+        MATCH (t:Ticker {symbol: $ticker})<-[:FOR_FIRM]-(f:Fact)-[:HAS_METRIC]->(m:Metric {name: $metric})
+        MATCH (f)-[:HAS_VALUE]->(v:Value)
+        MATCH (f)<-[:HAS_FACT]-(q:Quarter)
+        RETURN q.id AS quarter, v.content AS value, f.change AS change
+        ORDER BY q.id DESC
+        LIMIT $limit
+        """
+        
+        try:
+            with self.driver.session() as session:
+                result = session.run(query, {
+                    "ticker": ticker,
+                    "metric": metric,
+                    "limit": num_quarters
+                })
+                records = [dict(r) for r in result]
+                records.reverse()  # Return oldest first
+                return records
+        except Exception as e:
+            logger.warning(f"Metric trend query failed for {metric}: {e}")
+            return []
+
+    def retrieve_peer_facts_by_quarter(self, peer_tickers: List[str], 
+                                       quarter: str) -> List[Dict]:
+        """
+        Fallback: retrieve peer facts by direct quarter match (no vector search).
+        """
+        if not self.driver or not peer_tickers:
+            return []
+        
+        query = """
+        MATCH (q:Quarter {id: $quarter})-[:HAS_FACT]->(f:Fact)-[:FOR_FIRM]->(t:Ticker)
+        WHERE t.symbol IN $peers
+        MATCH (f)-[:HAS_VALUE]->(v:Value)
+        MATCH (f)-[:HAS_METRIC]->(m:Metric)
+        RETURN t.symbol AS ticker, m.name AS metric, v.content AS value,
+               f.quarter AS quarter, f.sentiment AS sentiment, f.change AS change
+        ORDER BY t.symbol, m.name
+        LIMIT 30
+        """
+        
+        try:
+            with self.driver.session() as session:
+                result = session.run(query, {
+                    "quarter": quarter,
+                    "peers": peer_tickers
+                })
+                return [dict(r) for r in result]
+        except Exception as e:
+            logger.warning(f"Direct peer query failed: {e}")
+            return []

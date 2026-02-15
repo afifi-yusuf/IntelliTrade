@@ -24,8 +24,10 @@ from llm import (
     fetch_stock_price_history,
     get_economic_data_for_quarter,
     load_earnings_transcript,
+    fetch_financial_metrics,
     build_comprehensive_context,
-    generate_llm_analysis
+    generate_llm_analysis,
+    generate_agentic_analysis
 )
 from vectorizer import NarrativeVectorizer
 from rl_agent import MarkovRLAgent
@@ -308,7 +310,8 @@ class Backtester:
         self,
         date: datetime,
         price_history: pd.DataFrame,
-        financial_data: Dict
+        financial_data: Dict,
+        position_ratio: float = 0.0
     ) -> Dict:
         """
         Generate trading signal for a specific date using only data available at that time
@@ -369,67 +372,103 @@ class Backtester:
                 if not cache_valid:
                     cached_summary = None
             
-            if cached_summary and 'embedding' in cached_summary:
-                # Cache hit - reuse existing analysis
-                llm_analysis_text = cached_summary['text']
-                embedding = np.array(cached_summary['embedding'], dtype=np.float64)
-            else:
-                # Cache miss - generate ONCE and cache it
-                print(f"   🔄 Generating LLM analysis for {recent_quarter} (first time)...")
-                
-                # Build context for this quarter
-                economic_data = get_economic_data_for_quarter(recent_quarter, current_date=date)
-                transcript = load_earnings_transcript(self.ticker, recent_quarter, current_date=date)
-                
-                if not transcript or len(transcript) < 100:
-                    # No transcript available - use neutral embedding and text
-                    llm_analysis_text = "No data available for this quarter."
-                    embedding = np.zeros(self.vectorizer.embedding_dim, dtype=np.float64)
+            try:
+                if cached_summary and 'embedding' in cached_summary:
+                    # Cache hit - reuse existing analysis
+                    llm_analysis_text = cached_summary['text']
+                    embedding = np.array(cached_summary['embedding'], dtype=np.float64)
+                    # Try to load cached signals, otherwise use defaults
+                    structured_signals = np.zeros(6, dtype=np.float32)
                 else:
-                    context, _, _ = build_comprehensive_context(
-                        self.ticker, recent_quarter, financial_data, current_date=date
-                    )
+                    # Cache miss - use MULTI-AGENT pipeline
+                    print(f"   🔄 Running Multi-Agent Analysis for {recent_quarter} (first time)...")
                     
-                    # Retrieve historical context
-                    graph_context = ""
-                    if self.graph_db:
-                        graph_context = self.graph_db.retrieve_all_context(self.ticker, max_quarter=recent_quarter)
+                    # Build context for this quarter
+                    economic_data = get_economic_data_for_quarter(recent_quarter, current_date=date)
+                    transcript = load_earnings_transcript(self.ticker, recent_quarter, current_date=date)
                     
-                    # Generate LLM analysis (this is the slow part, but only happens once per quarter)
-                    llm_analysis_text = generate_llm_analysis(context, graph_context)
-                    
-                    # Generate embedding
-                    embedding = self.vectorizer.get_embedding(llm_analysis_text)
-                    
-                    # Cache it for future trades in this quarter
-                    if self.graph_db:
-                        self.graph_db.ingest_quarterly_summary(
-                            self.ticker,
-                            recent_quarter,
-                            llm_analysis_text,
-                            embedding.tolist(),
-                            max_quarter=recent_quarter,
-                            generated_for_date=date.date().isoformat()
+                    if not transcript or len(transcript) < 100:
+                        # No transcript available - use neutral embedding and text
+                        llm_analysis_text = "No data available for this quarter."
+                        embedding = np.zeros(self.vectorizer.embedding_dim, dtype=np.float64)
+                        structured_signals = np.zeros(6, dtype=np.float32)
+                    else:
+                        # Run the multi-agent agentic RAG pipeline
+                        agentic_result = generate_agentic_analysis(
+                            ticker=self.ticker,
+                            quarter=recent_quarter,
+                            transcript=transcript,
+                            economic_data=economic_data,
+                            financial_metrics=financial_data,
+                            graph_db_instance=self.graph_db,
+                            vectorizer=self.vectorizer
                         )
-                        print(f"   ✅ Cached analysis for {recent_quarter}")
-            
+                        
+                        llm_analysis_text = agentic_result.get("narrative", "")
+                        if not llm_analysis_text:
+                            llm_analysis_text = "Analysis generation failed."
+                        
+                        # Generate embedding from the full narrative
+                        embedding = self.vectorizer.get_embedding(llm_analysis_text)
+                        
+                        # Extract structured signals for RL
+                        signals = agentic_result.get("signals", {})
+                        structured_signals = np.array([
+                            signals.get("revenue_trend", 0.0),
+                            signals.get("margin_trend", 0.0),
+                            signals.get("peer_relative", 0.0),
+                            signals.get("historical_momentum", 0.0),
+                            signals.get("risk_level", 0.5),
+                            signals.get("overall_sentiment", 0.0)
+                        ], dtype=np.float32)
+                        
+                        # Cache the analysis for future trades in this quarter
+                        if self.graph_db:
+                            self.graph_db.ingest_quarterly_summary(
+                                self.ticker,
+                                recent_quarter,
+                                llm_analysis_text,
+                                embedding.tolist(),
+                                max_quarter=recent_quarter,
+                                generated_for_date=date.date().isoformat()
+                            )
+                            print(f"   ✅ Cached multi-agent analysis for {recent_quarter}")
+            except Exception as e:
+                logger.warning(f"⚠️ Multi-Agent pipeline unavailable. Falling back. Error: {e}")
+                llm_analysis_text = "Technical Analysis Only (LLM Unavailable)"
+                embedding = np.zeros(self.vectorizer.embedding_dim, dtype=np.float64)
+                structured_signals = np.zeros(6, dtype=np.float32)
+                
             # Get narrative state (uses keyword analysis on text)
             narrative_state = self.vectorizer.get_narrative_state(text=llm_analysis_text)
             
             # Debug: Print sentiment analysis occasionally
             if np.random.random() < 0.1:  # 10% of trades
-                print(f"   🔍 DEBUG | Quarter: {recent_quarter} | State: {narrative_state} (0=Bull, 1=Neut, 2=Bear) | Text preview: {llm_analysis_text[:80]}...")
+                print(f"   🔍 DEBUG | Quarter: {recent_quarter} | State: {narrative_state} (0=Bull, 1=Neut, 2=Bear) | Signals: {structured_signals}")
             
             # Generate RL signal
-            signal = self.rl_agent.get_signal(
+            signal_kwargs = dict(
                 narrative_vector=embedding,
                 price_history=price_history,
                 financial_data=financial_data,
-                narrative_state=narrative_state
+                narrative_state=narrative_state,
+                position_ratio=position_ratio,
+                structured_signals=structured_signals
             )
+            
+            # For DQN, also pass explore flag
+            from dqn_agent import DQNAgent
+            if isinstance(self.rl_agent, DQNAgent):
+                signal_kwargs['explore'] = self.enable_learning
+            
+            signal = self.rl_agent.get_signal(**signal_kwargs)
             
             # Inject LLM analysis text into signal for logging
             signal['llm_analysis'] = llm_analysis_text
+            
+            # Add fallback flag if applicable
+            if "Technical Analysis Only" in llm_analysis_text:
+                signal['fallback_active'] = True
             
             return signal
             
@@ -464,7 +503,7 @@ class Backtester:
         
         # Print header for trade log
         print("\n" + "="*120)
-        print(f"{'Date':<12} | {'Action':<4} | {'Price':>10} | {'Shares':>8} | {'Cash':>14} | {'Portfolio Value':>16} | Progress")
+        print(f"{'Date':<12} | {'Action':<15} | {'Price':>10} | {'Shares':>8} | {'Cash':>14} | {'Portfolio Value':>16} | Progress")
         print("="*120)
         
         # Run simulation
@@ -493,8 +532,13 @@ class Backtester:
             # Store portfolio value before trade (for RL reward calculation)
             portfolio_value_before = self.portfolio.get_value(current_price)
             
+            # Compute position ratio (fraction of portfolio in stock)
+            stock_value = self.portfolio.shares * current_price
+            total_value = portfolio_value_before if portfolio_value_before > 0 else 1.0
+            position_ratio = stock_value / total_value
+            
             # Generate trading signal
-            signal = self.generate_signal_for_date(date, price_history, financial_data)
+            signal = self.generate_signal_for_date(date, price_history, financial_data, position_ratio=position_ratio)
             
             # Calculate position size based on confidence
             if self.use_confidence_sizing:
@@ -524,22 +568,36 @@ class Backtester:
             
             # Update RL agent with reward (Q-learning)
             if self.rl_agent and self.rl_agent.enable_learning:
-                next_state_key = (
-                    signal.get('narrative_state', 1),
-                    signal.get('financial_state', 1)
-                )
-                next_q_values = signal.get('q_values', {"BUY": 0.0, "HOLD": 0.0, "SELL": 0.0})
-                self.rl_agent.update(portfolio_value, next_state_key, next_q_values)
+                if signal.get('fallback_active', False):
+                    # SKIP UPDATE if fallback was active (to avoid training on missing narrative)
+                    logger.debug(f"⚠️ Training update skipped for {date.date()} due to missing narrative data.")
+                else:
+                    next_state_key = (
+                        signal.get('narrative_state', 1),
+                        signal.get('financial_state', 1)
+                    )
+                    next_q_values = signal.get('q_values', {"BUY": 0.0, "HOLD": 0.0, "SELL": 0.0})
+                    self.rl_agent.update(portfolio_value, next_state_key, next_q_values)
             
             # Log progress for EVERY trade (not just every 10%)
             pct_complete = (i + 1) / len(trading_dates) * 100
             
-            # Show different symbol based on action
-            action_symbol = "🟢" if signal['action'] == "BUY" else "🔴" if signal['action'] == "SELL" else "⚪"
+            # Display logic
+            action_display = signal['action']
+            action_symbol = "⚪"
+            
+            if signal['action'] == "BUY":
+                action_symbol = "🟢"
+            elif signal['action'] == "SELL":
+                if self.portfolio.shares <= 0.001 and not executed:
+                     action_symbol = "⚪"
+                     action_display = "SKIP (Empty)"
+                else:
+                     action_symbol = "🔴"
             
             print(
                 f"{action_symbol} {date.date()} | "
-                f"{signal['action']:4s} | "
+                f"{action_display:15s} | "
                 f"Price: ${current_price:7.2f} | "
                 f"Shares: {self.portfolio.shares:6.1f} | "
                 f"Cash: ${self.portfolio.cash:10,.2f} | "
@@ -547,7 +605,6 @@ class Backtester:
                 f"({pct_complete:5.1f}%)",
                 flush=True
             )
-        
         # Calculate final metrics
         final_price = self.price_data.iloc[-1]['close']
         final_value = self.portfolio.get_value(final_price)

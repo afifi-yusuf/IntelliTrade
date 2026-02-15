@@ -60,29 +60,31 @@ class MarkovRLAgent:
         """
         # Format: (Narrative, Financial) -> {Action: Score}
         
-        # 1. Bullish Narrative + Good Financials -> Strong BUY
+        # 1. Bullish Narrative + Good Financials -> BUY (but not overwhelming)
         self.q_table[(0, 0)] = {
-            "BUY": 0.9, "HOLD": 0.1, "SELL": -0.8
+            "BUY": 0.5, "HOLD": 0.3, "SELL": -0.1
         }
         
-        # 2. Bullish Narrative + Bad Financials -> Speculative (HOLD/BUY)
+        # 2. Bullish Narrative + Bad Financials -> Caution: SELL or HOLD
         self.q_table[(0, 1)] = {
-            "BUY": 0.4, "HOLD": 0.5, "SELL": -0.2
+            "BUY": 0.1, "HOLD": 0.4, "SELL": 0.3
         }
         
-        # 3. Bearish Narrative + Good Financials -> Contrarian BUY (good company, temporary weakness)
+        # 3. Bearish Narrative + Good Financials -> SELL (protect gains)
         self.q_table[(2, 0)] = {
-            "BUY": 0.6, "HOLD": 0.3, "SELL": -0.1  # Changed from conservative HOLD to opportunistic BUY
+            "BUY": 0.1, "HOLD": 0.3, "SELL": 0.4
         }
         
-        # 4. Bearish Narrative + Bad Financials -> SELL or HOLD (avoid catching falling knife)
+        # 4. Bearish Narrative + Bad Financials -> Strong SELL
         self.q_table[(2, 1)] = {
-            "BUY": -0.7, "HOLD": 0.4, "SELL": 0.7  # Slightly less aggressive SELL
+            "BUY": -0.6, "HOLD": 0.1, "SELL": 0.8
         }
         
-        # Defaults for others (Neutral)
-        self.q_table[(1, 0)] = {"BUY": 0.7, "HOLD": 0.2, "SELL": -0.2}  # More aggressive BUY on good fundamentals
-        self.q_table[(1, 1)] = {"BUY": -0.1, "HOLD": 0.6, "SELL": 0.3}
+        # 5. Neutral + Good Financials -> Slight BUY bias
+        self.q_table[(1, 0)] = {"BUY": 0.3, "HOLD": 0.4, "SELL": 0.1}
+        
+        # 6. Neutral + Bad Financials -> SELL bias
+        self.q_table[(1, 1)] = {"BUY": -0.3, "HOLD": 0.3, "SELL": 0.6}
 
     def extract_stock_features(self, price_history: pd.DataFrame) -> dict:
         """
@@ -205,7 +207,9 @@ class MarkovRLAgent:
         return 0 if score >= 0 else 1
 
     def get_signal(self, narrative_vector: np.ndarray, price_history: pd.DataFrame, 
-                   financial_data: dict, narrative_state: int = None):
+                   financial_data: dict, narrative_state: int = None,
+                   position_ratio: float = 0.0,
+                   structured_signals: np.ndarray = None):
         """
         Get the optimal action for the current state using enriched features.
         
@@ -214,6 +218,7 @@ class MarkovRLAgent:
             price_history: DataFrame with stock price history
             financial_data: Dictionary with financial metrics
             narrative_state: Optional discrete narrative state (for backward compatibility)
+            position_ratio: Fraction of portfolio currently invested (0.0=all cash, 1.0=fully invested)
         """
         # Extract stock features
         stock_features = self.extract_stock_features(price_history)
@@ -223,24 +228,62 @@ class MarkovRLAgent:
         
         # If narrative_state not provided, infer from vector
         if narrative_state is None:
-            # Simple clustering: compute weighted sum to infer bullish/bearish
-            if narrative_vector is not None and len(narrative_vector) > 0:
-                vector_score = np.mean(narrative_vector)
-                if vector_score > 0.05:
-                    narrative_state = 0  # Bullish
-                elif vector_score < 0.02:
-                    narrative_state = 2  # Bearish
-                else:
-                    narrative_state = 1  # Neutral
-            else:
-                narrative_state = 1
+            # Default to Neutral — np.mean(embedding) is unreliable for sentiment
+            # The vectorizer's cosine-similarity method (used in backtest) is preferred
+            narrative_state = 1  # Neutral
         
         # Lookup Base Q-Values from table
         state_key = (narrative_state, fin_state)
-        base_q_values = self.q_table.get(state_key, {"BUY": 0.0, "HOLD": 1.0, "SELL": 0.0})
+        base_q_values = self.q_table.get(state_key, {"BUY": 0.0, "HOLD": 0.5, "SELL": 0.0})
         
         # Adjust Q-Values based on stock features
         adjusted_q_values = self._adjust_q_values_with_features(base_q_values, stock_features)
+        
+        # Position-aware adjustments
+        if position_ratio > 0.5:
+            # Heavily invested — boost SELL, penalize BUY
+            adjusted_q_values["SELL"] += 0.3 * position_ratio
+            adjusted_q_values["BUY"] -= 0.5 * position_ratio
+        elif position_ratio < 0.1:
+            # No position — penalize SELL, slight boost to BUY
+            adjusted_q_values["SELL"] -= 0.5
+            adjusted_q_values["BUY"] += 0.2
+        
+        # Structured signals from multi-agent analysis
+        if structured_signals is not None and len(structured_signals) >= 6:
+            revenue_trend = float(structured_signals[0])
+            margin_trend = float(structured_signals[1])
+            peer_relative = float(structured_signals[2])
+            hist_momentum = float(structured_signals[3])
+            risk_level = float(structured_signals[4])
+            overall_sentiment = float(structured_signals[5])
+            
+            # Sentiment-driven adjustments (strongest signal)
+            if overall_sentiment > 0.3:
+                adjusted_q_values["BUY"] += 0.25 * overall_sentiment
+                adjusted_q_values["SELL"] -= 0.15 * overall_sentiment
+            elif overall_sentiment < -0.3:
+                adjusted_q_values["SELL"] += 0.25 * abs(overall_sentiment)
+                adjusted_q_values["BUY"] -= 0.15 * abs(overall_sentiment)
+            
+            # Peer comparison: outperforming = hold/buy, underperforming = sell
+            if peer_relative > 0.3:
+                adjusted_q_values["BUY"] += 0.15 * peer_relative
+                adjusted_q_values["HOLD"] += 0.1
+            elif peer_relative < -0.3:
+                adjusted_q_values["SELL"] += 0.15 * abs(peer_relative)
+                adjusted_q_values["BUY"] -= 0.1
+            
+            # Historical momentum
+            if hist_momentum > 0.3:
+                adjusted_q_values["BUY"] += 0.1 * hist_momentum
+            elif hist_momentum < -0.3:
+                adjusted_q_values["SELL"] += 0.1 * abs(hist_momentum)
+            
+            # Risk level: high risk = more cautious
+            if risk_level > 0.7:
+                adjusted_q_values["HOLD"] += 0.15
+                adjusted_q_values["BUY"] -= 0.1
         
         # Select Action using EPSILON-GREEDY (exploration vs exploitation)
         if self.enable_learning and np.random.random() < self.epsilon:
@@ -254,6 +297,10 @@ class MarkovRLAgent:
         
         # Normalize confidence for display
         confidence = max(0.1, min(1.0, abs(confidence)))
+
+        # Enforce minimum sell confidence
+        if best_action == "SELL" and confidence < 0.5:
+             confidence = 0.5
         
         # Build detailed rationale
         rationale = self._build_rationale(narrative_state, fin_state, stock_features, best_action)
@@ -283,33 +330,42 @@ class MarkovRLAgent:
         rsi = stock_features["rsi"]
         volatility = stock_features["volatility"]
         
-        # Momentum adjustments
+        # Momentum adjustments (stronger to overcome base priors)
         if momentum > 5:  # Strong positive momentum
-            adjusted["BUY"] += 0.2
+            adjusted["BUY"] += 0.3
             adjusted["SELL"] -= 0.2
-        elif momentum < -5:  # Strong negative momentum
-            adjusted["SELL"] += 0.2
-            adjusted["BUY"] -= 0.2
+        elif momentum < -3:  # Negative momentum (lower threshold)
+            adjusted["SELL"] += 0.4
+            adjusted["BUY"] -= 0.3
         
         # Trend adjustments
-        if trend > 3:  # Uptrend
-            adjusted["BUY"] += 0.15
-            adjusted["SELL"] -= 0.1
-        elif trend < -3:  # Downtrend
-            adjusted["SELL"] += 0.15
-            adjusted["BUY"] -= 0.1
+        if trend > 2:  # Uptrend (lower threshold)
+            adjusted["BUY"] += 0.2
+            adjusted["SELL"] -= 0.15
+        elif trend < -2:  # Downtrend (lower threshold)
+            adjusted["SELL"] += 0.4
+            adjusted["BUY"] -= 0.35
         
         # RSI adjustments (overbought/oversold)
-        if rsi > 70:  # Overbought
-            adjusted["SELL"] += 0.1
+        if rsi > 70:  # Overbought — strong SELL signal
+            adjusted["SELL"] += 0.5
+            adjusted["BUY"] -= 0.5
+        elif rsi > 60:  # Moderately overbought
+            adjusted["SELL"] += 0.2
             adjusted["BUY"] -= 0.15
-        elif rsi < 30:  # Oversold
-            adjusted["BUY"] += 0.1
-            adjusted["SELL"] -= 0.15
+        elif rsi < 30:  # Oversold — strong BUY signal
+            adjusted["BUY"] += 0.4
+            adjusted["SELL"] -= 0.3
+        elif rsi < 40:  # Moderately oversold
+            adjusted["BUY"] += 0.15
+            adjusted["SELL"] -= 0.1
         
         # Volatility adjustments (high volatility = more caution)
         if volatility > 3:
-            adjusted["HOLD"] += 0.1
+            adjusted["HOLD"] += 0.15
+            # In high vol, reduce extreme positions
+            adjusted["BUY"] -= 0.05
+            adjusted["SELL"] -= 0.05
         
         return adjusted
     

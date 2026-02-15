@@ -152,12 +152,14 @@ class DQNAgent:
     def get_state_vector(self, narrative_vector: np.ndarray, 
                          stock_features: dict, 
                          narrative_state: int,
-                         financial_state: int) -> np.ndarray:
+                         financial_state: int,
+                         position_ratio: float = 0.0,
+                         structured_signals: np.ndarray = None) -> np.ndarray:
         """
         Combine all state information into a single vector
         
         Returns:
-            State vector: [narrative_embedding, technical_features, categorical_features]
+            State vector: [narrative_embedding, technical_features, categorical_features, position_ratio, structured_signals]
         """
         # Ensure narrative_vector is 1-dimensional
         narrative_vector = np.atleast_1d(narrative_vector).astype(np.float32)
@@ -165,8 +167,8 @@ class DQNAgent:
             narrative_vector = narrative_vector.flatten()
         
         # Ensure consistent embedding dimension based on configured state_dim
-        # Pad with zeros or truncate to match expected dimension
-        expected_embedding_dim = max(1, self.state_dim - (7 + 3 + 2))
+        # state_dim = embedding_dim + 7 (tech) + 3 (narrative onehot) + 2 (financial onehot) + 1 (position_ratio) + 6 (structured signals)
+        expected_embedding_dim = max(1, self.state_dim - (7 + 3 + 2 + 1 + 6))
         if len(narrative_vector) < expected_embedding_dim:
             # Pad with zeros
             padding = np.zeros(expected_embedding_dim - len(narrative_vector), dtype=np.float32)
@@ -203,6 +205,15 @@ class DQNAgent:
         financial_onehot = np.zeros(2, dtype=np.float32)
         financial_onehot[int(financial_state)] = 1.0
         state_parts.append(financial_onehot)
+        
+        # Position ratio (1 feature)
+        state_parts.append(np.array([float(position_ratio)], dtype=np.float32))
+        
+        # Structured signals from multi-agent analysis (6 features)
+        if structured_signals is not None and len(structured_signals) >= 6:
+            state_parts.append(np.array(structured_signals[:6], dtype=np.float32))
+        else:
+            state_parts.append(np.zeros(6, dtype=np.float32))
         
         # Concatenate all parts
         state_vector = np.concatenate(state_parts)
@@ -307,9 +318,15 @@ class DQNAgent:
     
     def get_signal(self, narrative_vector: np.ndarray, price_history, 
                    financial_data: dict, narrative_state: int = None,
-                   financial_state: int = None) -> dict:
+                   financial_state: int = None,
+                   position_ratio: float = 0.0,
+                   structured_signals: np.ndarray = None,
+                   explore: bool = False) -> dict:
         """
         Get trading signal (compatible with backtest interface)
+        
+        Args:
+            explore: If True, use epsilon-greedy exploration. Default False for inference.
         """
         # Import here to avoid circular dependency
         from rl_agent import MarkovRLAgent
@@ -323,13 +340,15 @@ class DQNAgent:
         if financial_state is None:
             financial_state = temp_agent.assess_financial_state(financial_data)
         
-        # Get state vector
+        # Get state vector (now includes position_ratio and structured_signals)
         state = self.get_state_vector(
-            narrative_vector, stock_features, narrative_state, financial_state
+            narrative_vector, stock_features, narrative_state, financial_state,
+            position_ratio=position_ratio,
+            structured_signals=structured_signals
         )
         
-        # Get action
-        action_idx, q_values = self.get_action(state, explore=True)
+        # Get action — only explore during training
+        action_idx, q_values = self.get_action(state, explore=explore)
         action = self.actions[action_idx]
         
         # Store current state and action for learning
@@ -372,13 +391,20 @@ class DQNAgent:
             raw_reward = (current_portfolio_value - self.last_portfolio_value) / self.last_portfolio_value * 100
             
             # Risk-Adjustment (Volatility Penalty)
-            # We use the standard deviation of recent rewards as a proxy for volatility
             self.reward_history.append(float(raw_reward))
             volatility = np.std(self.reward_history[-20:]) if len(self.reward_history) >= 20 else 0.0
             
-            # Reward = Return - (Penalty_Factor * Volatility)
-            # This penalizes erratic returns, encouraging stable growth (Sharpe-like behavior)
+            # Base reward: return minus volatility penalty
             reward = raw_reward - (0.1 * volatility)
+            
+            # Holding penalty: small negative reward for HOLD when losing money
+            last_action_name = self.actions[self.last_action_idx]
+            if last_action_name == "HOLD" and raw_reward < -0.5:
+                reward -= 0.3  # Penalize holding during losses
+            
+            # Profit-taking bonus: reward SELL that locks in gains
+            if last_action_name == "SELL" and raw_reward > 0:
+                reward += 0.2  # Bonus for profitable exit
             
             reward = np.clip(reward, -10, 10)  # Clip result
             

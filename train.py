@@ -52,7 +52,7 @@ def train_agent(method='dqn', epochs=50, save_freq=5, train_cutoff_date="2024-01
     # 1. Initialize Shared Resources
     print("⏳ Initializing Vectorizer (this takes a moment)...")
     vectorizer = NarrativeVectorizer(model_name='all-MiniLM-L6-v2')
-    state_dim = vectorizer.embedding_dim + 7 + 3 + 2
+    state_dim = vectorizer.embedding_dim + 7 + 3 + 2 + 1 + 6  # +1 position_ratio, +6 structured signals
     print(f"   ✅ Vectorizer initialized. Dim: {vectorizer.embedding_dim}")
 
     # 2. Initialize Agent

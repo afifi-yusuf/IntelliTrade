@@ -11,6 +11,10 @@ from datetime import datetime
 from graph_manager import Neo4jHandler
 from vectorizer import NarrativeVectorizer
 from rl_agent import MarkovRLAgent
+from agents import FactExtractorAgent, PeerAnalystAgent, HistoricalAnalystAgent, SynthesizerAgent
+
+# Import sector mapping for graph initialization
+from agents.peer_analyst import SECTOR_MAP
 
 load_dotenv()
 
@@ -24,6 +28,15 @@ azure_client = AzureOpenAI(
 # Initialize Neo4j
 try:
     graph_db = Neo4jHandler()
+    # Initialize enhanced graph schema for multi-agent system
+    if graph_db and graph_db.driver:
+        # Setup vector index for semantic search on facts
+        graph_db.setup_vector_index(embedding_dim=384)
+        # Create Sector nodes and link tickers
+        for ticker, sector in SECTOR_MAP.items():
+            graph_db.ingest_sector(ticker, sector)
+        # Create temporal edges between quarters
+        graph_db.setup_temporal_edges()
 except:
     graph_db = None
     print("⚠️ Neo4j not connected.")
@@ -342,6 +355,95 @@ Provide your strategic analysis:"""
         print(f"   ❌ Error generating LLM analysis: {e}")
         return ""
 
+
+def generate_agentic_analysis(
+    ticker: str, quarter: str, transcript: str,
+    economic_data: dict, financial_metrics: dict,
+    graph_db_instance=None, vectorizer=None
+) -> dict:
+    """
+    Multi-Agent Agentic RAG Pipeline:
+    1. FactExtractor agent extracts structured facts from transcript
+    2. Facts stored in Neo4j with embeddings
+    3. PeerAnalyst queries graph for peer comparison
+    4. HistoricalAnalyst queries graph for historical trends
+    5. Synthesizer combines everything → narrative + structured signals
+    
+    Returns: {
+        "narrative": str,
+        "signals": {"revenue_trend": float, "margin_trend": float, ...},
+        "facts": List[Dict],
+        "peer_analysis": str,
+        "historical_analysis": str
+    }
+    """
+    gdb = graph_db_instance or graph_db
+    default_signals = {
+        "revenue_trend": 0.0, "margin_trend": 0.0, "peer_relative": 0.0,
+        "historical_momentum": 0.0, "risk_level": 0.5, "overall_sentiment": 0.0
+    }
+    
+    # Initialize agents (all share the same azure client)
+    fact_extractor = FactExtractorAgent(azure_client=azure_client)
+    peer_analyst = PeerAnalystAgent(graph_db=gdb, azure_client=azure_client)
+    historical_analyst = HistoricalAnalystAgent(graph_db=gdb, azure_client=azure_client)
+    synthesizer = SynthesizerAgent(azure_client=azure_client)
+    
+    # ---- Agent 1: Extract Facts ----
+    print(f"   🔬 [FactExtractor] Extracting structured facts...")
+    facts = fact_extractor.extract(transcript, ticker, quarter)
+    print(f"   ✅ Extracted {len(facts)} facts")
+    
+    # Store facts in Neo4j with embeddings
+    if gdb and vectorizer and facts:
+        for fact in facts:
+            try:
+                fact_text = f"{fact['metric']}: {fact['value']}"
+                if fact.get('context'):
+                    fact_text += f" — {fact['context']}"
+                fact_embedding = vectorizer.get_embedding(fact_text)
+                if fact_embedding is not None:
+                    gdb.ingest_fact_with_embedding(
+                        fact, 
+                        fact_embedding.tolist() if hasattr(fact_embedding, 'tolist') else fact_embedding
+                    )
+            except Exception as e:
+                print(f"   ⚠️ Could not store fact in graph: {e}")
+    
+    # ---- Agent 2: Peer Comparison ----
+    print(f"   🏢 [PeerAnalyst] Comparing against sector peers...")
+    peer_result = peer_analyst.analyze(facts, ticker, quarter, embedder=vectorizer)
+    print(f"   ✅ Peer score: {peer_result.get('peer_score', 0):+.2f}")
+    
+    # ---- Agent 3: Historical Analysis ----
+    print(f"   📈 [HistoricalAnalyst] Analyzing multi-quarter trends...")
+    historical_result = historical_analyst.analyze(facts, ticker, quarter, embedder=vectorizer)
+    print(f"   ✅ Momentum: {historical_result.get('momentum', 0):+.2f}")
+    
+    # ---- Agent 4: Synthesize Everything ----
+    print(f"   🧠 [Synthesizer] Combining all analyses...")
+    synthesis = synthesizer.synthesize(
+        ticker=ticker,
+        quarter=quarter,
+        facts=facts,
+        peer_result=peer_result,
+        historical_result=historical_result,
+        economic_data=economic_data
+    )
+    
+    signals = synthesis.get("signals", default_signals)
+    narrative = synthesis.get("narrative", "")
+    
+    print(f"   ✅ Synthesis complete | Sentiment: {signals.get('overall_sentiment', 0):+.2f} | Risk: {signals.get('risk_level', 0.5):.2f}")
+    
+    return {
+        "narrative": narrative,
+        "signals": signals,
+        "facts": facts,
+        "peer_analysis": peer_result.get("analysis", ""),
+        "historical_analysis": historical_result.get("analysis", "")
+    }
+
 def process_quarterly_context_and_generate_analysis(ticker: str, num_quarters: int = 3) -> tuple:
     """
     Context Enriched Agentic RAG Pipeline:
@@ -411,7 +513,7 @@ def process_quarterly_context_and_generate_analysis(ticker: str, num_quarters: i
             # 3. GET HISTORICAL CONTEXT FROM GRAPH
             historical_context = ""
             if graph_db:
-                historical_context = graph_db.retrieve_all_context(ticker)
+                historical_context = graph_db.retrieve_all_context(ticker, max_quarter=quarter_id)
             
             # 4. GENERATE LLM ANALYSIS
             print(f"   🤖 Generating LLM analysis...")

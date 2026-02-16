@@ -311,7 +311,8 @@ class Backtester:
         date: datetime,
         price_history: pd.DataFrame,
         financial_data: Dict,
-        position_ratio: float = 0.0
+        position_ratio: float = 0.0,
+        position_state: str = "FLAT"
     ) -> Dict:
         """
         Generate trading signal for a specific date using only data available at that time
@@ -460,6 +461,7 @@ class Backtester:
             from dqn_agent import DQNAgent
             if isinstance(self.rl_agent, DQNAgent):
                 signal_kwargs['explore'] = self.enable_learning
+                signal_kwargs['position_state'] = position_state
             
             signal = self.rl_agent.get_signal(**signal_kwargs)
             
@@ -496,6 +498,7 @@ class Backtester:
         logger.info("")
         
         trading_dates = self.get_trading_dates()
+        from dqn_agent import DQNAgent
         logger.info(f"📅 Total trading dates: {len(trading_dates)}")
         logger.info(f"   First: {trading_dates[0].date()}")
         logger.info(f"   Last: {trading_dates[-1].date()}")
@@ -536,12 +539,29 @@ class Backtester:
             stock_value = self.portfolio.shares * current_price
             total_value = portfolio_value_before if portfolio_value_before > 0 else 1.0
             position_ratio = stock_value / total_value
+            position_state = "LONG" if self.portfolio.shares > 0.001 else "FLAT"
             
             # Generate trading signal
-            signal = self.generate_signal_for_date(date, price_history, financial_data, position_ratio=position_ratio)
+            signal = self.generate_signal_for_date(
+                date,
+                price_history,
+                financial_data,
+                position_ratio=position_ratio,
+                position_state=position_state
+            )
+
+            # Hard guard for atomic long-only transitions, regardless of model output:
+            # FLAT: BUY/HOLD only, LONG: SELL/HOLD only.
+            if position_state == "FLAT" and signal.get('action') == "SELL":
+                signal['action'] = "HOLD"
+            elif position_state == "LONG" and signal.get('action') == "BUY":
+                signal['action'] = "HOLD"
             
             # Calculate position size based on confidence
-            if self.use_confidence_sizing:
+            if isinstance(self.rl_agent, DQNAgent):
+                # Atomic all-in/all-out for DQN.
+                position_size = 1.0
+            elif self.use_confidence_sizing:
                 # Confidence-weighted: Use confidence (0-1) as position size
                 # Ensure minimum 10% and maximum 100%
                 confidence = signal['confidence']

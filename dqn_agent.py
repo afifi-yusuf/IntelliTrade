@@ -31,6 +31,14 @@ class DQNNetwork(nn.Module):
     def __init__(self, state_dim: int, action_dim: int = 3, hidden_dims: List[int] = [256, 128, 64]):
         super(DQNNetwork, self).__init__()
         
+        self.structured_signal_dim = 6
+        self.signal_attention = nn.Sequential(
+            nn.Linear(self.structured_signal_dim, 16),
+            nn.ReLU(),
+            nn.Linear(16, self.structured_signal_dim),
+            nn.Softmax(dim=-1)
+        )
+        
         layers = []
         input_dim = state_dim
         
@@ -47,8 +55,18 @@ class DQNNetwork(nn.Module):
         self.network = nn.Sequential(*layers)
         
     def forward(self, state: torch.Tensor) -> torch.Tensor:
-        """Forward pass: state -> Q-values"""
-        return self.network(state)
+        """Forward pass: state -> attention-weighted Q-values"""
+        if state.shape[-1] < self.structured_signal_dim:
+            return self.network(state)
+        
+        base_features = state[:, :-self.structured_signal_dim]
+        structured_signals = state[:, -self.structured_signal_dim:]
+        
+        attention_weights = self.signal_attention(structured_signals)
+        weighted_signals = structured_signals * attention_weights
+        attended_state = torch.cat([base_features, weighted_signals], dim=-1)
+        
+        return self.network(attended_state)
 
 
 class ReplayBuffer:
@@ -220,7 +238,12 @@ class DQNAgent:
         
         return state_vector
     
-    def get_action(self, state: np.ndarray, explore: bool = True) -> Tuple[int, np.ndarray]:
+    def get_action(
+        self,
+        state: np.ndarray,
+        explore: bool = True,
+        position_state: str = "FLAT"
+    ) -> Tuple[int, np.ndarray]:
         """
         Select action using epsilon-greedy policy
         
@@ -232,10 +255,19 @@ class DQNAgent:
             action_idx: 0=BUY, 1=HOLD, 2=SELL
             q_values: Q-values for all actions
         """
+        position_state = (position_state or "FLAT").upper()
+        if position_state not in {"FLAT", "LONG"}:
+            position_state = "FLAT"
+
+        # Atomic long-only constraints:
+        # FLAT -> can BUY or HOLD
+        # LONG -> can SELL or HOLD
+        valid_actions = [0, 1] if position_state == "FLAT" else [1, 2]
+
         # Epsilon-greedy exploration
         if explore and self.enable_learning and random.random() < self.epsilon:
-            # Explore: random action
-            action_idx = random.randint(0, self.action_dim - 1)
+            # Explore only among valid actions
+            action_idx = random.choice(valid_actions)
             q_values = np.zeros(self.action_dim)
         else:
             # Exploit: best action from Q-network
@@ -244,11 +276,17 @@ class DQNAgent:
             with torch.no_grad():
                 q_values = self.q_network(state_tensor).cpu().numpy()[0]
             if not np.all(np.isfinite(q_values)):
-                action_idx = random.randint(0, self.action_dim - 1)
+                action_idx = random.choice(valid_actions)
                 q_values = np.zeros(self.action_dim)
                 return action_idx, q_values
-            
-            action_idx = np.argmax(q_values)
+
+            masked_q_values = np.array(q_values, copy=True)
+            if position_state == "FLAT":
+                masked_q_values[2] = -np.inf  # Can't SELL while flat
+            else:
+                masked_q_values[0] = -np.inf  # Can't BUY while already long
+
+            action_idx = int(np.argmax(masked_q_values))
         
         return action_idx, q_values
     
@@ -321,6 +359,7 @@ class DQNAgent:
                    financial_state: int = None,
                    position_ratio: float = 0.0,
                    structured_signals: np.ndarray = None,
+                   position_state: str = "FLAT",
                    explore: bool = False) -> dict:
         """
         Get trading signal (compatible with backtest interface)
@@ -348,7 +387,11 @@ class DQNAgent:
         )
         
         # Get action — only explore during training
-        action_idx, q_values = self.get_action(state, explore=explore)
+        action_idx, q_values = self.get_action(
+            state,
+            explore=explore,
+            position_state=position_state
+        )
         action = self.actions[action_idx]
         
         # Store current state and action for learning

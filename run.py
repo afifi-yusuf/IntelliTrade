@@ -59,7 +59,7 @@ def run_backtest(
     print(f"  Method: {method}")
     print(f"  Position Sizing: {'Confidence-weighted (10-100%)' if use_confidence_sizing else 'All-in/all-out (100%)'}")
     
-    if method in ['qlearning', 'dqn']:
+    if method in ['qlearning', 'dqn', 'dqn_nollm']:
         print(f"  Learning Enabled: {enable_learning}")
     
     # Initialize backtester
@@ -71,12 +71,13 @@ def run_backtest(
         discount_factor=discount_factor,
         epsilon=epsilon,
         use_confidence_sizing=use_confidence_sizing,
+        use_llm_signals=(method != 'dqn_nollm'),
         start_date=start_date,
         read_only=read_only
     )
     
     # For DQN, replace the RL agent
-    if method == 'dqn':
+    if method in ('dqn', 'dqn_nollm'):
         from dqn_agent import DQNAgent
         from vectorizer import NarrativeVectorizer
         
@@ -126,8 +127,12 @@ def run_backtest(
                 print(f"⚠️ Failed to load Q-table: {e}")
     
     # Fetch financial data
-    print(f"📈 Fetching financial metrics for {ticker}...")
-    financial_data = fetch_financial_metrics(ticker)
+    if method == 'dqn_nollm':
+        print(f"📈 Price-only mode active for {ticker} (skipping LLM/earnings/financial context).")
+        financial_data = {}
+    else:
+        print(f"📈 Fetching financial metrics for {ticker}...")
+        financial_data = fetch_financial_metrics(ticker)
     
     # Run backtest
     print(f"\n🔄 Running backtest...\n")
@@ -149,8 +154,9 @@ def run_backtest(
             backtester.rl_agent.save_q_table(filepath)
             print(f"\n💾 Q-table saved to: {filepath}")
         
-        elif method == 'dqn' and hasattr(backtester.rl_agent, 'save_model'):
-            filepath = f'backtest_results/dqn_model_{ticker}.pth'
+        elif method in ('dqn', 'dqn_nollm') and hasattr(backtester.rl_agent, 'save_model'):
+            prefix = 'dqn_nollm_model' if method == 'dqn_nollm' else 'dqn_model'
+            filepath = f'backtest_results/{prefix}_{ticker}.pth'
             backtester.rl_agent.save_model(filepath)
             print(f"\n💾 DQN model saved to: {filepath}")
     
@@ -163,62 +169,17 @@ def run_training(method: str, epochs: int, cutoff: str):
     train_agent(method=method, epochs=epochs, train_cutoff_date=cutoff)
 
 def compare_methods(ticker: str = 'NVDA', initial_capital: float = 10000.0):
-    """Compare all three methods: Fixed Q-table, Q-learning, DQN using BEST available models"""
+    """Compare DQN variants only: DQN and DQN price-only."""
     
     print(f"\n{'='*80}")
-    print(f"🔬 COMPARING ALL METHODS FOR {ticker}")
+    print(f"🔬 COMPARING DQN VARIANTS FOR {ticker}")
     print(f"{'='*80}\n")
     
     results = {}
-    
-    # 1. Fixed Q-table (baseline)
-    print(f"\n{'─'*80}")
-    print("1/3: Fixed Q-table (Baseline)")
-    print(f"{'─'*80}")
-    try:
-        results['Fixed Q-table'] = run_backtest(
-            ticker=ticker,
-            method='fixed',
-            initial_capital=initial_capital,
-            enable_learning=False,
-            save_model=False,
-            use_confidence_sizing=True,
-            start_date='2024-01-01',
-            read_only=True
-        )
-    except Exception as e:
-        print(f"❌ Failed: {e}")
-    
-    # 2. Q-learning
-    print(f"\n{'─'*80}")
-    print("2/3: Q-learning (Pre-trained)")
-    print(f"{'─'*80}")
-    # Try to find best model
-    q_model = 'backtest_results/q_table_walkforward_final.json'
-    if not os.path.exists(q_model):
-        print("⚠️ No pre-trained Q-table found at default path. Using untrained agent.")
-        q_model = None
-    else:
-        print(f"📂 Loading: {q_model}")
 
-    try:
-        results['Q-learning'] = run_backtest(
-            ticker=ticker,
-            method='qlearning',
-            initial_capital=initial_capital,
-            model_path=q_model,
-            enable_learning=False, # Testing mode
-            save_model=False,
-            use_confidence_sizing=True,
-            start_date='2024-01-01',
-            read_only=True
-        )
-    except Exception as e:
-        print(f"❌ Failed: {e}")
-    
-    # 3. DQN
+    # 1. DQN
     print(f"\n{'─'*80}")
-    print("3/3: Deep Q-Network (DQN) (Pre-trained)")
+    print("1/2: Deep Q-Network (DQN) (Pre-trained)")
     print(f"{'─'*80}")
     dqn_model = 'backtest_results/dqn_model_walkforward_final.pth'
     if not os.path.exists(dqn_model):
@@ -234,6 +195,32 @@ def compare_methods(ticker: str = 'NVDA', initial_capital: float = 10000.0):
             initial_capital=initial_capital,
             model_path=dqn_model,
             enable_learning=False, # Testing mode
+            save_model=False,
+            use_confidence_sizing=True,
+            start_date='2024-01-01',
+            read_only=True
+        )
+    except Exception as e:
+        print(f"❌ Failed: {e}")
+
+    # 2. DQN (Price-Only / No LLM)
+    print(f"\n{'─'*80}")
+    print("2/2: Deep Q-Network (Price-Only, No LLM) (Pre-trained)")
+    print(f"{'─'*80}")
+    dqn_nollm_model = 'backtest_results/dqn_nollm_model_walkforward_final.pth'
+    if not os.path.exists(dqn_nollm_model):
+        print("⚠️ No pre-trained DQN No-LLM model found at default path. Using untrained agent.")
+        dqn_nollm_model = None
+    else:
+        print(f"📂 Loading: {dqn_nollm_model}")
+
+    try:
+        results['DQN Price Only'] = run_backtest(
+            ticker=ticker,
+            method='dqn_nollm',
+            initial_capital=initial_capital,
+            model_path=dqn_nollm_model,
+            enable_learning=False,  # Testing mode
             save_model=False,
             use_confidence_sizing=True,
             start_date='2024-01-01',
@@ -303,6 +290,7 @@ Examples:
   
   # Train Agents
   python run.py train --method dqn --epochs 50
+  python run.py train --method dqn_nollm --epochs 50
   
   # Compare all methods
   python run.py compare --ticker NVDA
@@ -322,14 +310,14 @@ Examples:
     
     # Train
     parser_train = subparsers.add_parser('train', help='Train RL Agent')
-    parser_train.add_argument('--method', choices=['dqn', 'qlearning'], default='dqn', help='RL Method')
+    parser_train.add_argument('--method', choices=['dqn', 'dqn_nollm', 'qlearning'], default='dqn', help='RL Method')
     parser_train.add_argument('--epochs', type=int, default=50, help='Number of epochs')
     parser_train.add_argument('--cutoff', type=str, default="2024-01-01", help='Training Cutoff Date')
 
     # Backtest
     parser_backtest = subparsers.add_parser('backtest', help='Run backtest')
     parser_backtest.add_argument('--ticker', default='NVDA', help='Stock ticker (default: NVDA)')
-    parser_backtest.add_argument('--method', choices=['fixed', 'qlearning', 'dqn'], default='qlearning')
+    parser_backtest.add_argument('--method', choices=['fixed', 'qlearning', 'dqn', 'dqn_nollm'], default='qlearning')
     parser_backtest.add_argument('--capital', type=float, default=10000.0)
     parser_backtest.add_argument('--learning-rate', type=float, default=0.1)
     parser_backtest.add_argument('--epsilon', type=float, default=0.1)

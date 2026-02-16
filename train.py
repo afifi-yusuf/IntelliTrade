@@ -55,9 +55,13 @@ def train_agent(method='dqn', epochs=50, save_freq=5, train_cutoff_date="2024-01
     state_dim = vectorizer.embedding_dim + 7 + 3 + 2 + 1 + 6  # +1 position_ratio, +6 structured signals
     print(f"   ✅ Vectorizer initialized. Dim: {vectorizer.embedding_dim}")
 
+    is_dqn = method in ('dqn', 'dqn_nollm')
+    use_llm_signals = method != 'dqn_nollm'
+    model_prefix = 'dqn_nollm' if method == 'dqn_nollm' else 'dqn'
+
     # 2. Initialize Agent
     agent = None
-    if method == 'dqn':
+    if is_dqn:
         agent = DQNAgent(
             state_dim=state_dim,
             learning_rate=0.0005,
@@ -88,6 +92,11 @@ def train_agent(method='dqn', epochs=50, save_freq=5, train_cutoff_date="2024-01
     cutoff_dt = datetime.strptime(train_cutoff_date, "%Y-%m-%d")
 
     for ticker in TICKERS:
+        if not use_llm_signals:
+            financial_data_cache[ticker] = {}
+            print(f"   ✅ Loaded {ticker} (price-only mode)")
+            continue
+
         try:
             with suppress_stdout():
                 financial_data_cache[ticker] = fetch_financial_metrics(ticker)
@@ -134,6 +143,7 @@ def train_agent(method='dqn', epochs=50, save_freq=5, train_cutoff_date="2024-01
                         initial_capital=10000.0,
                         enable_learning=True,
                         epsilon=display_epsilon, # Passed to backtester but agent might override
+                        use_llm_signals=use_llm_signals,
                         read_only=True # CRITICAL: Do not write to graph during training
                     )
                     
@@ -170,23 +180,23 @@ def train_agent(method='dqn', epochs=50, save_freq=5, train_cutoff_date="2024-01
         
         print(f"\r   Processing: [{'█'*progress_bar_length}] DONE!")
         
-        if method == 'dqn':
+        if is_dqn:
             print(f"   📊 Stats | Loss: {stats['avg_loss']:.4f} | Eps: {stats['exploration_rate']:.3f} | Buffer: {stats['buffer_size']} | Avg Ret: {avg_return:>6.2f}%")
         else:
             print(f"   📊 Stats | Q-Table Size: {stats['q_table_size']} | Eps: {display_epsilon:.3f} | Avg Ret: {avg_return:>6.2f}%")
         
         # Save Checkpoint
         if epoch % save_freq == 0:
-            if method == 'dqn':
-                path = f"{results_dir}/dqn_model_walkforward_epoch_{epoch}.pth"
+            if is_dqn:
+                path = f"{results_dir}/{model_prefix}_model_walkforward_epoch_{epoch}.pth"
                 agent.save_model(path)
             else:
                 path = f"{results_dir}/q_table_walkforward_epoch_{epoch}.json"
                 agent.save_q_table(path)
 
     # Final Save
-    if method == 'dqn':
-        final_path = f"{results_dir}/dqn_model_walkforward_final.pth"
+    if is_dqn:
+        final_path = f"{results_dir}/{model_prefix}_model_walkforward_final.pth"
         agent.save_model(final_path)
         print(f"\n✅ TRAINING COMPLETE! Model saved to {final_path}")
     else:
@@ -196,7 +206,7 @@ def train_agent(method='dqn', epochs=50, save_freq=5, train_cutoff_date="2024-01
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Train RL Agent')
-    parser.add_argument('--method', choices=['dqn', 'qlearning'], default='dqn', help='RL Method')
+    parser.add_argument('--method', choices=['dqn', 'dqn_nollm', 'qlearning'], default='dqn', help='RL Method')
     parser.add_argument('--epochs', type=int, default=50, help='Number of epochs')
     parser.add_argument('--cutoff', type=str, default="2024-01-01", help='Training Data Cutoff Date')
     args = parser.parse_args()

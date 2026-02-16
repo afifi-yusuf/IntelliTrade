@@ -187,6 +187,7 @@ class Backtester:
         epsilon: float = 0.1,  # ε exploration rate
 
         use_confidence_sizing: bool = True,  # Weight position size by confidence
+        use_llm_signals: bool = True,  # If False, run price-only (no LLM/earnings/financial context)
         start_date: Optional[str] = None,  # Start date for backtest (YYYY-MM-DD)
         read_only: bool = False # Prevent writing to graph
     ):
@@ -199,6 +200,7 @@ class Backtester:
         self.discount_factor = discount_factor
         self.epsilon = epsilon
         self.use_confidence_sizing = use_confidence_sizing
+        self.use_llm_signals = use_llm_signals
         self.start_date = start_date
         self.read_only = read_only
         
@@ -318,19 +320,6 @@ class Backtester:
         Generate trading signal for a specific date using only data available at that time
         """
         try:
-            # Get available quarters (no look-ahead bias)
-            available_quarters = self.get_available_quarters(date)
-            
-            if not available_quarters:
-                logger.debug(f"No quarterly data available for {date.date()}")
-                return {
-                    "action": "HOLD",
-                    "confidence": 0.0,
-                    "narrative_state": 1,
-                    "financial_state": 1,
-                    "reason": "Insufficient historical data"
-                }
-            
             # Initialize models if not already done (only once)
             if self.vectorizer is None:
                 logger.info("🔢 Initializing vectorizer (one-time setup)...")
@@ -350,6 +339,47 @@ class Backtester:
                     logger.info(f"   ✅ RL agent ready (Learning ENABLED: α={self.learning_rate}, γ={self.discount_factor}, ε={self.epsilon})")
                 else:
                     logger.info("   ✅ RL agent ready (Learning DISABLED - using fixed Q-table)")
+
+            if not self.use_llm_signals:
+                # Price-only mode: no LLM narrative, no earnings/transcript/economic context,
+                # and no structured multi-agent signals.
+                embedding = np.zeros(self.vectorizer.embedding_dim, dtype=np.float64)
+                structured_signals = np.zeros(6, dtype=np.float32)
+                narrative_state = 1
+                financial_state = 0
+                llm_analysis_text = "Price-only DQN mode (LLM/context disabled)."
+
+                signal_kwargs = dict(
+                    narrative_vector=embedding,
+                    price_history=price_history,
+                    financial_data={},
+                    narrative_state=narrative_state,
+                    financial_state=financial_state,
+                    position_ratio=position_ratio,
+                    structured_signals=structured_signals
+                )
+
+                from dqn_agent import DQNAgent
+                if isinstance(self.rl_agent, DQNAgent):
+                    signal_kwargs['explore'] = self.enable_learning
+                    signal_kwargs['position_state'] = position_state
+
+                signal = self.rl_agent.get_signal(**signal_kwargs)
+                signal['llm_analysis'] = llm_analysis_text
+                return signal
+
+            # Get available quarters (no look-ahead bias)
+            available_quarters = self.get_available_quarters(date)
+            
+            if not available_quarters:
+                logger.debug(f"No quarterly data available for {date.date()}")
+                return {
+                    "action": "HOLD",
+                    "confidence": 0.0,
+                    "narrative_state": 1,
+                    "financial_state": 1,
+                    "reason": "Insufficient historical data"
+                }
             
             # Get most recent quarter
             recent_quarter = available_quarters[-1]

@@ -129,7 +129,7 @@ Compare {ticker} against its peers and assess relative performance:"""
                     {"role": "system", "content": PEER_ANALYSIS_PROMPT},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.3,
+                temperature=0.0,
                 max_completion_tokens=500
             )
             
@@ -164,7 +164,8 @@ Compare {ticker} against its peers and assess relative performance:"""
                     query_embedding=query_embedding.tolist() if isinstance(query_embedding, np.ndarray) else query_embedding,
                     exclude_ticker=ticker,
                     peer_tickers=peers,
-                    top_k=10
+                    top_k=10,
+                    max_quarter=quarter
                 )
                 all_peer_facts.extend(results)
         except Exception as e:

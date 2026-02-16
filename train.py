@@ -52,7 +52,7 @@ def train_agent(method='dqn', epochs=50, save_freq=5, train_cutoff_date="2024-01
     # 1. Initialize Shared Resources
     print("⏳ Initializing Vectorizer (this takes a moment)...")
     vectorizer = NarrativeVectorizer(model_name='all-MiniLM-L6-v2')
-    state_dim = vectorizer.embedding_dim + 7 + 3 + 2 + 1 + 6  # +1 position_ratio, +6 structured signals
+    state_dim = vectorizer.embedding_dim + 7 + 3 + 2 + 1 + 6 + 5  # +6 structured signals, +5 context reliability
     print(f"   ✅ Vectorizer initialized. Dim: {vectorizer.embedding_dim}")
 
     is_dqn = method in ('dqn', 'dqn_nollm')
@@ -64,6 +64,7 @@ def train_agent(method='dqn', epochs=50, save_freq=5, train_cutoff_date="2024-01
     if is_dqn:
         agent = DQNAgent(
             state_dim=state_dim,
+            embedding_dim=vectorizer.embedding_dim,
             learning_rate=0.0005,
             epsilon=1.0,           
             epsilon_decay=0.995,

@@ -107,7 +107,7 @@ Analyze the historical trends and current trajectory:"""
                     {"role": "system", "content": HISTORICAL_ANALYSIS_PROMPT},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.3,
+                temperature=0.0,
                 max_completion_tokens=500
             )
             

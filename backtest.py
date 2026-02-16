@@ -207,6 +207,7 @@ class Backtester:
         self.portfolio = Portfolio(initial_capital, transaction_cost_pct)
         self.vectorizer: Optional[NarrativeVectorizer] = None
         self.rl_agent: Optional[MarkovRLAgent] = None
+        self._summary_cache: Dict[str, Dict] = {}
         
         # Initialize Neo4j handler
         try:
@@ -307,6 +308,77 @@ class Backtester:
                     quarters.append(quarter_id)
         
         return quarters[-3:] if len(quarters) >= 3 else quarters  # Use last 3 quarters
+
+    def _filter_financial_data_for_date(self, financial_data: Dict, current_date: datetime) -> Dict:
+        """
+        Build point-in-time financial input by filtering dated surprise records.
+        Prevents leaking future quarterly surprises into past timesteps.
+        """
+        if not financial_data:
+            return {}
+
+        filtered = {
+            "financials": financial_data.get("financials", {}),
+            "surprise": []
+        }
+
+        surprises = financial_data.get("surprise", []) or []
+        parsed = []
+        for row in surprises:
+            if not isinstance(row, dict):
+                continue
+            date_raw = row.get("reportedDate") or row.get("fiscalDateEnding") or row.get("date")
+            try:
+                row_dt = pd.to_datetime(date_raw) if date_raw else None
+            except Exception:
+                row_dt = None
+
+            if row_dt is None or pd.isna(row_dt):
+                continue
+            if row_dt <= pd.Timestamp(current_date):
+                parsed.append((row_dt, row))
+
+        # Keep newest-first ordering expected by assess_financial_state.
+        parsed.sort(key=lambda x: x[0], reverse=True)
+        filtered["surprise"] = [row for _, row in parsed]
+        return filtered
+
+    def _quarter_reporting_date(self, quarter_id: str) -> datetime:
+        """Approximate date when quarter information is first available."""
+        try:
+            year_str, quarter_str = quarter_id.split("-")
+            year = int(year_str)
+            q = int(quarter_str.replace("Q", ""))
+        except Exception:
+            # Defensive fallback if quarter format is malformed.
+            return datetime.now()
+        quarter_end_month = q * 3
+        if quarter_end_month == 12:
+            return datetime(year + 1, 1, 31)
+        return datetime(year, quarter_end_month + 1, 30)
+
+    def _build_context_meta(
+        self,
+        current_date: datetime,
+        quarter_id: str,
+        reliability: Dict,
+        is_new_quarter: bool
+    ) -> np.ndarray:
+        """
+        Build compact context quality features for RL gating.
+        Order:
+        [days_since_report_norm, is_new_quarter, agent_agreement, evidence_strength, parse_success]
+        """
+        report_date = self._quarter_reporting_date(quarter_id)
+        days_since_report = max(0.0, (current_date - report_date).days)
+        days_since_report_norm = float(np.clip(days_since_report / 120.0, 0.0, 1.0))
+        return np.array([
+            days_since_report_norm,
+            1.0 if is_new_quarter else 0.0,
+            float(np.clip(reliability.get("agent_agreement", 0.5), 0.0, 1.0)),
+            float(np.clip(reliability.get("evidence_strength", 0.0), 0.0, 1.0)),
+            float(np.clip(reliability.get("parse_success", 0.0), 0.0, 1.0)),
+        ], dtype=np.float32)
     
     def generate_signal_for_date(
         self,
@@ -320,6 +392,9 @@ class Backtester:
         Generate trading signal for a specific date using only data available at that time
         """
         try:
+            # Time-aware financial view to avoid future surprise leakage.
+            financial_data_pti = self._filter_financial_data_for_date(financial_data, date)
+
             # Initialize models if not already done (only once)
             if self.vectorizer is None:
                 logger.info("🔢 Initializing vectorizer (one-time setup)...")
@@ -345,22 +420,23 @@ class Backtester:
                 # and no structured multi-agent signals.
                 embedding = np.zeros(self.vectorizer.embedding_dim, dtype=np.float64)
                 structured_signals = np.zeros(6, dtype=np.float32)
+                context_meta = np.zeros(5, dtype=np.float32)
                 narrative_state = 1
                 financial_state = 0
                 llm_analysis_text = "Price-only DQN mode (LLM/context disabled)."
 
+                from dqn_agent import DQNAgent
                 signal_kwargs = dict(
                     narrative_vector=embedding,
                     price_history=price_history,
                     financial_data={},
                     narrative_state=narrative_state,
-                    financial_state=financial_state,
                     position_ratio=position_ratio,
-                    structured_signals=structured_signals
+                    structured_signals=structured_signals,
                 )
-
-                from dqn_agent import DQNAgent
                 if isinstance(self.rl_agent, DQNAgent):
+                    signal_kwargs["financial_state"] = financial_state
+                    signal_kwargs["context_meta"] = context_meta
                     signal_kwargs['explore'] = self.enable_learning
                     signal_kwargs['position_state'] = position_state
 
@@ -383,10 +459,18 @@ class Backtester:
             
             # Get most recent quarter
             recent_quarter = available_quarters[-1]
+            is_new_quarter = False
+            reliability = {
+                "evidence_count": 0,
+                "evidence_strength": 0.0,
+                "agent_agreement": 0.5,
+                "parse_success": 0.0,
+                "agent_confidences": {}
+            }
             
             # Try to get cached data first
-            cached_summary = None
-            if self.graph_db:
+            cached_summary = self._summary_cache.get(recent_quarter)
+            if cached_summary is None and self.graph_db:
                 cached_summary = self.graph_db.retrieve_quarterly_summary(self.ticker, recent_quarter)
             
             if cached_summary and 'embedding' in cached_summary:
@@ -402,16 +486,33 @@ class Backtester:
                         cache_valid = False
                 if not cache_valid:
                     cached_summary = None
+                    self._summary_cache.pop(recent_quarter, None)
+                else:
+                    self._summary_cache[recent_quarter] = cached_summary
             
             try:
                 if cached_summary and 'embedding' in cached_summary:
                     # Cache hit - reuse existing analysis
                     llm_analysis_text = cached_summary['text']
                     embedding = np.array(cached_summary['embedding'], dtype=np.float64)
-                    # Try to load cached signals, otherwise use defaults
-                    structured_signals = np.zeros(6, dtype=np.float32)
+                    reliability = cached_summary.get("reliability", reliability)
+                    cached_signals = cached_summary.get("structured_signals", {})
+                    if isinstance(cached_signals, dict):
+                        structured_signals = np.array([
+                            float(cached_signals.get("revenue_trend", 0.0)),
+                            float(cached_signals.get("margin_trend", 0.0)),
+                            float(cached_signals.get("peer_relative", 0.0)),
+                            float(cached_signals.get("historical_momentum", 0.0)),
+                            float(cached_signals.get("risk_level", 0.5)),
+                            float(cached_signals.get("overall_sentiment", 0.0))
+                        ], dtype=np.float32)
+                    elif isinstance(cached_signals, (list, tuple, np.ndarray)) and len(cached_signals) >= 6:
+                        structured_signals = np.array(cached_signals[:6], dtype=np.float32)
+                    else:
+                        structured_signals = np.zeros(6, dtype=np.float32)
                 else:
                     # Cache miss - use MULTI-AGENT pipeline
+                    is_new_quarter = True
                     print(f"   🔄 Running Multi-Agent Analysis for {recent_quarter} (first time)...")
                     
                     # Build context for this quarter
@@ -423,6 +524,30 @@ class Backtester:
                         llm_analysis_text = "No data available for this quarter."
                         embedding = np.zeros(self.vectorizer.embedding_dim, dtype=np.float64)
                         structured_signals = np.zeros(6, dtype=np.float32)
+                        signals = {
+                            "revenue_trend": 0.0,
+                            "margin_trend": 0.0,
+                            "peer_relative": 0.0,
+                            "historical_momentum": 0.0,
+                            "risk_level": 0.5,
+                            "overall_sentiment": 0.0
+                        }
+                        reliability = {
+                            "evidence_count": 0,
+                            "evidence_strength": 0.0,
+                            "agent_agreement": 0.5,
+                            "parse_success": 0.0,
+                            "agent_confidences": {}
+                        }
+                        self._summary_cache[recent_quarter] = {
+                            "text": llm_analysis_text,
+                            "embedding": embedding.tolist(),
+                            "max_quarter": recent_quarter,
+                            "generated_for_date": date.date().isoformat(),
+                            "structured_signals": signals,
+                            "reliability": reliability,
+                            "source_quarter": recent_quarter
+                        }
                     else:
                         # Run the multi-agent agentic RAG pipeline
                         agentic_result = generate_agentic_analysis(
@@ -430,9 +555,10 @@ class Backtester:
                             quarter=recent_quarter,
                             transcript=transcript,
                             economic_data=economic_data,
-                            financial_metrics=financial_data,
+                            financial_metrics=financial_data_pti,
                             graph_db_instance=self.graph_db,
-                            vectorizer=self.vectorizer
+                            vectorizer=self.vectorizer,
+                            read_only=self.read_only
                         )
                         
                         llm_analysis_text = agentic_result.get("narrative", "")
@@ -444,6 +570,7 @@ class Backtester:
                         
                         # Extract structured signals for RL
                         signals = agentic_result.get("signals", {})
+                        reliability = agentic_result.get("reliability", reliability)
                         structured_signals = np.array([
                             signals.get("revenue_trend", 0.0),
                             signals.get("margin_trend", 0.0),
@@ -454,14 +581,27 @@ class Backtester:
                         ], dtype=np.float32)
                         
                         # Cache the analysis for future trades in this quarter
-                        if self.graph_db:
+                        self._summary_cache[recent_quarter] = {
+                            "text": llm_analysis_text,
+                            "embedding": embedding.tolist() if hasattr(embedding, "tolist") else embedding,
+                            "max_quarter": recent_quarter,
+                            "generated_for_date": date.date().isoformat(),
+                            "structured_signals": signals,
+                            "reliability": reliability,
+                            "source_quarter": agentic_result.get("source_quarter", recent_quarter)
+                        }
+
+                        if self.graph_db and not self.read_only:
                             self.graph_db.ingest_quarterly_summary(
                                 self.ticker,
                                 recent_quarter,
                                 llm_analysis_text,
                                 embedding.tolist(),
                                 max_quarter=recent_quarter,
-                                generated_for_date=date.date().isoformat()
+                                generated_for_date=date.date().isoformat(),
+                                structured_signals=signals,
+                                reliability=reliability,
+                                source_quarter=agentic_result.get("source_quarter", recent_quarter)
                             )
                             print(f"   ✅ Cached multi-agent analysis for {recent_quarter}")
             except Exception as e:
@@ -469,6 +609,20 @@ class Backtester:
                 llm_analysis_text = "Technical Analysis Only (LLM Unavailable)"
                 embedding = np.zeros(self.vectorizer.embedding_dim, dtype=np.float64)
                 structured_signals = np.zeros(6, dtype=np.float32)
+                reliability = {
+                    "evidence_count": 0,
+                    "evidence_strength": 0.0,
+                    "agent_agreement": 0.5,
+                    "parse_success": 0.0,
+                    "agent_confidences": {}
+                }
+
+            context_meta = self._build_context_meta(
+                current_date=date,
+                quarter_id=recent_quarter,
+                reliability=reliability,
+                is_new_quarter=is_new_quarter
+            )
                 
             # Get narrative state (uses keyword analysis on text)
             narrative_state = self.vectorizer.get_narrative_state(text=llm_analysis_text)
@@ -481,7 +635,7 @@ class Backtester:
             signal_kwargs = dict(
                 narrative_vector=embedding,
                 price_history=price_history,
-                financial_data=financial_data,
+                financial_data=financial_data_pti,
                 narrative_state=narrative_state,
                 position_ratio=position_ratio,
                 structured_signals=structured_signals
@@ -490,6 +644,7 @@ class Backtester:
             # For DQN, also pass explore flag
             from dqn_agent import DQNAgent
             if isinstance(self.rl_agent, DQNAgent):
+                signal_kwargs["context_meta"] = context_meta
                 signal_kwargs['explore'] = self.enable_learning
                 signal_kwargs['position_state'] = position_state
             
@@ -729,7 +884,10 @@ class Backtester:
             first_date = self.portfolio.trade_history[0].date
             last_date = self.portfolio.trade_history[-1].date
             years = (last_date - first_date).days / 365.25
-            annualized_return_pct = (((final_value / self.initial_capital) ** (1 / years)) - 1) * 100 if years > 0 else 0
+            if years > 0 and final_value > 0 and self.initial_capital > 0:
+                annualized_return_pct = (((final_value / self.initial_capital) ** (1 / years)) - 1) * 100
+            else:
+                annualized_return_pct = 0
         else:
             annualized_return_pct = 0
         

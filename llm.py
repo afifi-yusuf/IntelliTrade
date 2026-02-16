@@ -359,7 +359,7 @@ Provide your strategic analysis:"""
 def generate_agentic_analysis(
     ticker: str, quarter: str, transcript: str,
     economic_data: dict, financial_metrics: dict,
-    graph_db_instance=None, vectorizer=None
+    graph_db_instance=None, vectorizer=None, read_only: bool = False
 ) -> dict:
     """
     Multi-Agent Agentic RAG Pipeline:
@@ -383,6 +383,32 @@ def generate_agentic_analysis(
         "historical_momentum": 0.0, "risk_level": 0.5, "overall_sentiment": 0.0
     }
     
+    def _clamp_signals(raw_signals: dict) -> dict:
+        bounded = default_signals.copy()
+        for key, default_value in default_signals.items():
+            try:
+                value = float(raw_signals.get(key, default_value))
+            except Exception:
+                value = default_value
+            lo, hi = (0.0, 1.0) if key == "risk_level" else (-1.0, 1.0)
+            bounded[key] = float(np.clip(value, lo, hi))
+        return bounded
+
+    def _delegate_fact(fact: dict) -> list:
+        category = str(fact.get("category", "")).lower()
+        if category in {"revenue", "profitability", "growth"}:
+            return ["historical_performance", "historical_earnings"]
+        if category == "guidance":
+            return ["historical_earnings"]
+        if category == "risk":
+            return ["competitor", "historical_earnings"]
+        return ["historical_performance"]
+
+    def _score_from_text(text: str) -> float:
+        if not text:
+            return 0.0
+        return float(np.clip(len(text) / 800.0, 0.0, 1.0))
+
     # Initialize agents (all share the same azure client)
     fact_extractor = FactExtractorAgent(azure_client=azure_client)
     peer_analyst = PeerAnalystAgent(graph_db=gdb, azure_client=azure_client)
@@ -393,9 +419,15 @@ def generate_agentic_analysis(
     print(f"   🔬 [FactExtractor] Extracting structured facts...")
     facts = fact_extractor.extract(transcript, ticker, quarter)
     print(f"   ✅ Extracted {len(facts)} facts")
+
+    # Delegation map (paper-style routing metadata)
+    delegation = {}
+    for fact in facts:
+        fact_id = fact.get("fact_id", "")
+        delegation[fact_id] = _delegate_fact(fact)
     
-    # Store facts in Neo4j with embeddings
-    if gdb and vectorizer and facts:
+    # Store facts in Neo4j with embeddings (skip writes in read-only mode)
+    if gdb and vectorizer and facts and not read_only:
         for fact in facts:
             try:
                 fact_text = f"{fact['metric']}: {fact['value']}"
@@ -431,17 +463,50 @@ def generate_agentic_analysis(
         economic_data=economic_data
     )
     
-    signals = synthesis.get("signals", default_signals)
+    signals = _clamp_signals(synthesis.get("signals", default_signals))
     narrative = synthesis.get("narrative", "")
-    
+
+    peer_score = float(np.clip(peer_result.get("peer_score", 0.0), -1.0, 1.0))
+    hist_momentum = float(np.clip(historical_result.get("momentum", 0.0), -1.0, 1.0))
+    synth_sentiment = float(np.clip(signals.get("overall_sentiment", 0.0), -1.0, 1.0))
+    directional = [peer_score, hist_momentum, synth_sentiment]
+    same_direction = [np.sign(v) for v in directional if abs(v) >= 0.05]
+    if same_direction:
+        agreement = abs(sum(same_direction)) / len(same_direction)
+    else:
+        agreement = 0.5
+
+    evidence_count = int(
+        len(facts)
+        + len(peer_result.get("peer_facts", []) or [])
+        + len(historical_result.get("historical_facts", []) or [])
+    )
+    evidence_strength = float(np.clip(evidence_count / 30.0, 0.0, 1.0))
+    parse_success = 1.0 if narrative and narrative.strip() else 0.0
+    agent_confidences = {
+        "peer_analyst": float(np.clip(abs(peer_score), 0.0, 1.0)),
+        "historical_analyst": float(np.clip(abs(hist_momentum), 0.0, 1.0)),
+        "synthesizer": _score_from_text(narrative),
+    }
+    reliability = {
+        "evidence_count": evidence_count,
+        "evidence_strength": evidence_strength,
+        "agent_agreement": float(np.clip(agreement, 0.0, 1.0)),
+        "parse_success": parse_success,
+        "agent_confidences": agent_confidences,
+    }
+
     print(f"   ✅ Synthesis complete | Sentiment: {signals.get('overall_sentiment', 0):+.2f} | Risk: {signals.get('risk_level', 0.5):.2f}")
     
     return {
         "narrative": narrative,
         "signals": signals,
+        "reliability": reliability,
+        "delegation": delegation,
         "facts": facts,
         "peer_analysis": peer_result.get("analysis", ""),
-        "historical_analysis": historical_result.get("analysis", "")
+        "historical_analysis": historical_result.get("analysis", ""),
+        "source_quarter": quarter
     }
 
 def process_quarterly_context_and_generate_analysis(ticker: str, num_quarters: int = 3) -> tuple:

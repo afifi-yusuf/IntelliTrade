@@ -93,7 +93,7 @@ class FactExtractorAgent:
                     {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.1,  # Low temp for consistent extraction
+                temperature=0.0,  # Deterministic extraction for reproducible runs
                 max_completion_tokens=2000
             )
             

@@ -113,7 +113,7 @@ Synthesize all inputs into a strategic assessment:"""
                     {"role": "system", "content": SYNTHESIS_PROMPT},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.3,
+                temperature=0.0,
                 max_completion_tokens=800
             )
             

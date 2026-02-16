@@ -14,7 +14,7 @@ import torch.optim as optim
 import numpy as np
 from collections import deque, namedtuple
 import random
-from typing import Tuple, List
+from typing import Tuple, List, Optional
 
 # Experience tuple for replay buffer
 Experience = namedtuple('Experience', 
@@ -28,45 +28,113 @@ class DQNNetwork(nn.Module):
     Input: State vector (narrative_embedding + technical_features + financial_state)
     Output: Q-values for each action [BUY, HOLD, SELL]
     """
-    def __init__(self, state_dim: int, action_dim: int = 3, hidden_dims: List[int] = [256, 128, 64]):
+    def __init__(self, state_dim: int, embedding_dim: int, action_dim: int = 3):
         super(DQNNetwork, self).__init__()
-        
+
+        self.embedding_dim = embedding_dim
+        self.tech_dim = 7
+        self.narrative_cat_dim = 3
+        self.financial_cat_dim = 2
+        self.position_dim = 1
         self.structured_signal_dim = 6
+        self.context_meta_dim = 5
+        self.expected_state_dim = (
+            self.embedding_dim
+            + self.tech_dim
+            + self.narrative_cat_dim
+            + self.financial_cat_dim
+            + self.position_dim
+            + self.structured_signal_dim
+            + self.context_meta_dim
+        )
+
+        self.price_input_dim = self.tech_dim + self.financial_cat_dim + self.position_dim
+        self.context_input_dim = self.embedding_dim + self.narrative_cat_dim + self.structured_signal_dim + self.context_meta_dim
+
+        # Learned attention over structured signals
         self.signal_attention = nn.Sequential(
             nn.Linear(self.structured_signal_dim, 16),
             nn.ReLU(),
             nn.Linear(16, self.structured_signal_dim),
             nn.Softmax(dim=-1)
         )
-        
-        layers = []
-        input_dim = state_dim
-        
-        # Build hidden layers
-        for hidden_dim in hidden_dims:
-            layers.append(nn.Linear(input_dim, hidden_dim))
-            layers.append(nn.ReLU())
-            layers.append(nn.Dropout(0.2))  # Prevent overfitting
-            input_dim = hidden_dim
-        
-        # Output layer
-        layers.append(nn.Linear(input_dim, action_dim))
-        
-        self.network = nn.Sequential(*layers)
-        
+
+        # Price branch: technical + position + financial state
+        self.price_branch = nn.Sequential(
+            nn.Linear(self.price_input_dim, 128),
+            nn.ReLU(),
+            nn.Dropout(0.1),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+        )
+
+        # Context branch: embeddings + narrative state + attended structured signals + reliability meta
+        self.context_branch = nn.Sequential(
+            nn.Linear(self.context_input_dim, 128),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+        )
+
+        # Context gate (alpha in [0,1]) controls how much context branch contributes.
+        self.context_gate = nn.Sequential(
+            nn.Linear(self.context_meta_dim, 16),
+            nn.ReLU(),
+            nn.Linear(16, 1),
+            nn.Sigmoid()
+        )
+
+        self.q_head = nn.Sequential(
+            nn.Linear(64, 64),
+            nn.ReLU(),
+            nn.Dropout(0.1),
+            nn.Linear(64, action_dim)
+        )
+
     def forward(self, state: torch.Tensor) -> torch.Tensor:
-        """Forward pass: state -> attention-weighted Q-values"""
-        if state.shape[-1] < self.structured_signal_dim:
-            return self.network(state)
-        
-        base_features = state[:, :-self.structured_signal_dim]
-        structured_signals = state[:, -self.structured_signal_dim:]
-        
+        """Forward pass with gated context integration."""
+        if state.dim() == 1:
+            state = state.unsqueeze(0)
+
+        if state.shape[-1] < self.expected_state_dim:
+            pad = torch.zeros(
+                state.shape[0],
+                self.expected_state_dim - state.shape[-1],
+                device=state.device,
+                dtype=state.dtype
+            )
+            state = torch.cat([state, pad], dim=-1)
+        elif state.shape[-1] > self.expected_state_dim:
+            state = state[:, :self.expected_state_dim]
+
+        idx = 0
+        narrative_embedding = state[:, idx:idx + self.embedding_dim]
+        idx += self.embedding_dim
+        tech_features = state[:, idx:idx + self.tech_dim]
+        idx += self.tech_dim
+        narrative_onehot = state[:, idx:idx + self.narrative_cat_dim]
+        idx += self.narrative_cat_dim
+        financial_onehot = state[:, idx:idx + self.financial_cat_dim]
+        idx += self.financial_cat_dim
+        position_ratio = state[:, idx:idx + self.position_dim]
+        idx += self.position_dim
+        structured_signals = state[:, idx:idx + self.structured_signal_dim]
+        idx += self.structured_signal_dim
+        context_meta = state[:, idx:idx + self.context_meta_dim]
+
         attention_weights = self.signal_attention(structured_signals)
         weighted_signals = structured_signals * attention_weights
-        attended_state = torch.cat([base_features, weighted_signals], dim=-1)
-        
-        return self.network(attended_state)
+
+        price_input = torch.cat([tech_features, financial_onehot, position_ratio], dim=-1)
+        context_input = torch.cat([narrative_embedding, narrative_onehot, weighted_signals, context_meta], dim=-1)
+
+        price_latent = self.price_branch(price_input)
+        context_latent = self.context_branch(context_input)
+
+        alpha = self.context_gate(context_meta)
+        fused_latent = price_latent + alpha * context_latent
+        return self.q_head(fused_latent)
 
 
 class ReplayBuffer:
@@ -102,6 +170,7 @@ class DQNAgent:
     def __init__(
         self,
         state_dim: int,
+        embedding_dim: Optional[int] = None,
         action_dim: int = 3,
         learning_rate: float = 0.001,
         discount_factor: float = 0.95,
@@ -116,6 +185,7 @@ class DQNAgent:
         """
         Args:
             state_dim: Dimension of state vector
+            embedding_dim: Narrative embedding dimension inside state vector
             action_dim: Number of actions (3: BUY, HOLD, SELL)
             learning_rate: Learning rate for optimizer
             discount_factor (γ): Discount future rewards
@@ -127,7 +197,32 @@ class DQNAgent:
             target_update_freq: Update target network every N steps
             enable_learning: If True, train the network
         """
-        self.state_dim = state_dim
+        self.tech_dim = 7
+        self.narrative_cat_dim = 3
+        self.financial_cat_dim = 2
+        self.position_dim = 1
+        self.structured_signal_dim = 6
+        self.context_meta_dim = 5
+
+        if embedding_dim is None:
+            embedding_dim = max(1, state_dim - (
+                self.tech_dim
+                + self.narrative_cat_dim
+                + self.financial_cat_dim
+                + self.position_dim
+                + self.structured_signal_dim
+                + self.context_meta_dim
+            ))
+        self.embedding_dim = int(embedding_dim)
+        self.state_dim = (
+            self.embedding_dim
+            + self.tech_dim
+            + self.narrative_cat_dim
+            + self.financial_cat_dim
+            + self.position_dim
+            + self.structured_signal_dim
+            + self.context_meta_dim
+        )
         self.action_dim = action_dim
         self.gamma = discount_factor
         self.epsilon = epsilon
@@ -141,10 +236,14 @@ class DQNAgent:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
         # Q-Network and Target Network
-        self.q_network = DQNNetwork(state_dim, action_dim).to(self.device)
-        self.target_network = DQNNetwork(state_dim, action_dim).to(self.device)
+        self.q_network = DQNNetwork(self.state_dim, embedding_dim=self.embedding_dim, action_dim=action_dim).to(self.device)
+        self.target_network = DQNNetwork(self.state_dim, embedding_dim=self.embedding_dim, action_dim=action_dim).to(self.device)
         self.target_network.load_state_dict(self.q_network.state_dict())
         self.target_network.eval()  # Target network in eval mode
+        if self.enable_learning:
+            self.q_network.train()
+        else:
+            self.q_network.eval()
         
         # Optimizer and loss
         self.optimizer = optim.Adam(self.q_network.parameters(), lr=learning_rate)
@@ -164,7 +263,7 @@ class DQNAgent:
         self.nan_skips = 0
         
         print(f"🧠 DQN Agent initialized on {self.device}")
-        print(f"   State dim: {state_dim}, Action dim: {action_dim}")
+        print(f"   State dim: {self.state_dim}, Action dim: {action_dim}")
         print(f"   Network: {sum(p.numel() for p in self.q_network.parameters())} parameters")
     
     def get_state_vector(self, narrative_vector: np.ndarray, 
@@ -172,7 +271,8 @@ class DQNAgent:
                          narrative_state: int,
                          financial_state: int,
                          position_ratio: float = 0.0,
-                         structured_signals: np.ndarray = None) -> np.ndarray:
+                         structured_signals: np.ndarray = None,
+                         context_meta: np.ndarray = None) -> np.ndarray:
         """
         Combine all state information into a single vector
         
@@ -184,9 +284,8 @@ class DQNAgent:
         if narrative_vector.ndim > 1:
             narrative_vector = narrative_vector.flatten()
         
-        # Ensure consistent embedding dimension based on configured state_dim
-        # state_dim = embedding_dim + 7 (tech) + 3 (narrative onehot) + 2 (financial onehot) + 1 (position_ratio) + 6 (structured signals)
-        expected_embedding_dim = max(1, self.state_dim - (7 + 3 + 2 + 1 + 6))
+        # Ensure consistent embedding dimension based on configured state layout.
+        expected_embedding_dim = self.embedding_dim
         if len(narrative_vector) < expected_embedding_dim:
             # Pad with zeros
             padding = np.zeros(expected_embedding_dim - len(narrative_vector), dtype=np.float32)
@@ -232,9 +331,20 @@ class DQNAgent:
             state_parts.append(np.array(structured_signals[:6], dtype=np.float32))
         else:
             state_parts.append(np.zeros(6, dtype=np.float32))
+
+        # Context quality/reliability metadata (5 features)
+        if context_meta is not None and len(context_meta) >= self.context_meta_dim:
+            state_parts.append(np.array(context_meta[:self.context_meta_dim], dtype=np.float32))
+        else:
+            state_parts.append(np.zeros(self.context_meta_dim, dtype=np.float32))
         
         # Concatenate all parts
         state_vector = np.concatenate(state_parts)
+        if len(state_vector) < self.state_dim:
+            pad = np.zeros(self.state_dim - len(state_vector), dtype=np.float32)
+            state_vector = np.concatenate([state_vector, pad])
+        elif len(state_vector) > self.state_dim:
+            state_vector = state_vector[:self.state_dim]
         
         return state_vector
     
@@ -359,6 +469,7 @@ class DQNAgent:
                    financial_state: int = None,
                    position_ratio: float = 0.0,
                    structured_signals: np.ndarray = None,
+                   context_meta: np.ndarray = None,
                    position_state: str = "FLAT",
                    explore: bool = False) -> dict:
         """
@@ -383,7 +494,8 @@ class DQNAgent:
         state = self.get_state_vector(
             narrative_vector, stock_features, narrative_state, financial_state,
             position_ratio=position_ratio,
-            structured_signals=structured_signals
+            structured_signals=structured_signals,
+            context_meta=context_meta
         )
         
         # Get action — only explore during training
@@ -393,6 +505,15 @@ class DQNAgent:
             position_state=position_state
         )
         action = self.actions[action_idx]
+
+        # Confidence as action softmax probability for bounded, comparable scores.
+        if len(q_values) > 0 and np.all(np.isfinite(q_values)):
+            q_shifted = q_values - np.max(q_values)
+            exp_q = np.exp(np.clip(q_shifted, -50.0, 50.0))
+            softmax_probs = exp_q / np.sum(exp_q)
+            confidence = float(softmax_probs[action_idx])
+        else:
+            confidence = 0.5
         
         # Store current state and action for learning
         self.current_state = state
@@ -401,7 +522,7 @@ class DQNAgent:
         # Build response
         return {
             "action": action,
-            "confidence": float(np.max(np.abs(q_values))) if len(q_values) > 0 else 0.5,
+            "confidence": confidence,
             "narrative_state": narrative_state,
             "financial_state": financial_state,
             "stock_features": stock_features,
@@ -510,17 +631,49 @@ class DQNAgent:
             'optimizer': self.optimizer.state_dict(),
             'training_steps': self.training_steps,
             'epsilon': self.epsilon,
-            'losses': self.losses
+            'losses': self.losses,
+            'state_dim': self.state_dim,
+            'embedding_dim': self.embedding_dim,
+            'context_meta_dim': self.context_meta_dim
         }, filepath)
         print(f"💾 DQN model saved to {filepath}")
     
     def load_model(self, filepath: str):
         """Load DQN model"""
         checkpoint = torch.load(filepath, map_location=self.device)
-        self.q_network.load_state_dict(checkpoint['q_network'])
-        self.target_network.load_state_dict(checkpoint['target_network'])
-        self.optimizer.load_state_dict(checkpoint['optimizer'])
-        self.training_steps = checkpoint['training_steps']
-        self.epsilon = checkpoint['epsilon']
-        self.losses = checkpoint['losses']
+
+        def _partial_load(model: nn.Module, source_state: dict):
+            target_state = model.state_dict()
+            compatible = {
+                key: value for key, value in source_state.items()
+                if key in target_state and target_state[key].shape == value.shape
+            }
+            target_state.update(compatible)
+            model.load_state_dict(target_state, strict=False)
+            return len(compatible), len(source_state)
+
+        try:
+            self.q_network.load_state_dict(checkpoint['q_network'])
+            self.target_network.load_state_dict(checkpoint['target_network'])
+        except Exception as e:
+            loaded_q, total_q = _partial_load(self.q_network, checkpoint.get('q_network', {}))
+            loaded_t, total_t = _partial_load(self.target_network, checkpoint.get('target_network', {}))
+            print(f"⚠️ Partial model load due to architecture mismatch: {e}")
+            print(f"   q_network: {loaded_q}/{total_q} tensors loaded")
+            print(f"   target_network: {loaded_t}/{total_t} tensors loaded")
+
+        try:
+            self.optimizer.load_state_dict(checkpoint['optimizer'])
+        except Exception:
+            pass
+
+        self.training_steps = checkpoint.get('training_steps', 0)
+        self.epsilon = checkpoint.get('epsilon', self.epsilon)
+        self.losses = checkpoint.get('losses', [])
+        # Ensure deterministic inference path (dropout disabled) when learning is off.
+        if self.enable_learning:
+            self.q_network.train()
+        else:
+            self.q_network.eval()
+        self.target_network.eval()
         print(f"📂 DQN model loaded from {filepath}")

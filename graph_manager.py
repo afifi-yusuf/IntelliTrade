@@ -1,5 +1,6 @@
 import os
 import time
+import json
 import neo4j
 from neo4j import GraphDatabase
 import logging
@@ -413,7 +414,10 @@ class Neo4jHandler:
         summary_text: str,
         embedding: list = None,
         max_quarter: str = None,
-        generated_for_date: str = None
+        generated_for_date: str = None,
+        structured_signals: Dict[str, float] = None,
+        reliability: Dict[str, Any] = None,
+        source_quarter: str = None
     ):
         """
         Ingest the LLM-generated analysis and its embedding vector.
@@ -429,7 +433,10 @@ class Neo4jHandler:
             s.embedding = $embedding,
             s.created_at = datetime(),
             s.max_quarter = $max_quarter,
-            s.generated_for_date = $generated_for_date
+            s.generated_for_date = $generated_for_date,
+            s.structured_signals_json = $structured_signals_json,
+            s.reliability_json = $reliability_json,
+            s.source_quarter = $source_quarter
         MERGE (t)-[:HAS_SUMMARY]->(s)
         MERGE (s)-[:IN_QUARTER]->(q)
         """
@@ -440,7 +447,10 @@ class Neo4jHandler:
             "text": summary_text,
             "embedding": embedding,
             "max_quarter": max_quarter,
-            "generated_for_date": generated_for_date
+            "generated_for_date": generated_for_date,
+            "structured_signals_json": json.dumps(structured_signals or {}),
+            "reliability_json": json.dumps(reliability or {}),
+            "source_quarter": source_quarter or quarter
         }
         
         try:
@@ -504,15 +514,35 @@ class Neo4jHandler:
         RETURN s.text as text,
                s.embedding as embedding,
                s.max_quarter as max_quarter,
-               s.generated_for_date as generated_for_date
+               s.generated_for_date as generated_for_date,
+               s.structured_signals_json as structured_signals_json,
+               s.reliability_json as reliability_json,
+               s.source_quarter as source_quarter
         """
         record = self._run_query(query, {"id": f"{ticker}_{quarter}"}, single=True)
         if record:
+            signals = {}
+            reliability = {}
+            try:
+                raw_signals = record.get("structured_signals_json")
+                if raw_signals:
+                    signals = json.loads(raw_signals)
+            except Exception:
+                signals = {}
+            try:
+                raw_reliability = record.get("reliability_json")
+                if raw_reliability:
+                    reliability = json.loads(raw_reliability)
+            except Exception:
+                reliability = {}
             return {
                 "text": record.get("text"),
                 "embedding": record.get("embedding"),
                 "max_quarter": record.get("max_quarter"),
-                "generated_for_date": record.get("generated_for_date")
+                "generated_for_date": record.get("generated_for_date"),
+                "structured_signals": signals,
+                "reliability": reliability,
+                "source_quarter": record.get("source_quarter")
             }
         return None
 
@@ -747,7 +777,8 @@ class Neo4jHandler:
             logger.error(f"Error ingesting fact with embedding: {e}")
 
     def search_peer_facts(self, query_embedding: list, exclude_ticker: str,
-                          peer_tickers: List[str], top_k: int = 10) -> List[Dict]:
+                          peer_tickers: List[str], top_k: int = 10,
+                          max_quarter: str = None) -> List[Dict]:
         """
         Vector search for semantically similar facts across peer companies.
         Uses the fact_embedding_index.
@@ -755,10 +786,21 @@ class Neo4jHandler:
         if not self.driver or not peer_tickers:
             return []
         
-        query = """
+        quarter_clause = ""
+        params = {
+            "topK": top_k,
+            "vec": query_embedding,
+            "peers": peer_tickers,
+            "exclude": exclude_ticker
+        }
+        if max_quarter:
+            quarter_clause = "AND node.quarter <= $max_quarter"
+            params["max_quarter"] = max_quarter
+
+        query = f"""
         CALL db.index.vector.queryNodes('fact_embedding_index', $topK, $vec)
         YIELD node, score
-        WHERE node.ticker IN $peers AND node.ticker <> $exclude AND score > 0.3
+        WHERE node.ticker IN $peers AND node.ticker <> $exclude AND score > 0.3 {quarter_clause}
         OPTIONAL MATCH (node)-[:HAS_VALUE]->(v:Value)
         RETURN node.ticker AS ticker, node.metric_name AS metric,
                v.content AS value, node.quarter AS quarter,
@@ -769,12 +811,7 @@ class Neo4jHandler:
         
         try:
             with self.driver.session() as session:
-                result = session.run(query, {
-                    "topK": top_k,
-                    "vec": query_embedding,
-                    "peers": peer_tickers,
-                    "exclude": exclude_ticker
-                })
+                result = session.run(query, params)
                 return [dict(r) for r in result]
         except Exception as e:
             logger.warning(f"Vector peer search failed: {e}")

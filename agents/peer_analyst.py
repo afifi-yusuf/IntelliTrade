@@ -130,7 +130,7 @@ Compare {ticker} against its peers and assess relative performance:"""
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.3,
-                max_tokens=500
+                max_completion_tokens=500
             )
             
             raw = response.choices[0].message.content.strip()

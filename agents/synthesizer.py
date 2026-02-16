@@ -114,7 +114,7 @@ Synthesize all inputs into a strategic assessment:"""
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.3,
-                max_tokens=800
+                max_completion_tokens=800
             )
             
             raw = response.choices[0].message.content.strip()

@@ -240,14 +240,35 @@ class MarkovRLAgent:
         adjusted_q_values = self._adjust_q_values_with_features(base_q_values, stock_features)
         
         # Position-aware adjustments
+        momentum = stock_features.get("momentum", 0)
+        trend = stock_features.get("trend", 0)
+        
         if position_ratio > 0.5:
             # Heavily invested — boost SELL, penalize BUY
             adjusted_q_values["SELL"] += 0.3 * position_ratio
             adjusted_q_values["BUY"] -= 0.5 * position_ratio
         elif position_ratio < 0.1:
-            # No position — penalize SELL, slight boost to BUY
-            adjusted_q_values["SELL"] -= 0.5
-            adjusted_q_values["BUY"] += 0.2
+            # No position — can't sell what we don't own
+            adjusted_q_values["SELL"] -= 1.0
+            
+            # Only encourage buying if technicals support it
+            if momentum > 2 or trend > 1:
+                adjusted_q_values["BUY"] += 0.4
+                adjusted_q_values["HOLD"] -= 0.2  # Penalize sitting on sidelines during uptrend
+            elif momentum < -3 or trend < -2:
+                # Technicals are bearish — sitting out IS the right move
+                adjusted_q_values["HOLD"] += 0.1
+            else:
+                # Neutral technicals — slight nudge toward BUY
+                adjusted_q_values["BUY"] += 0.15
+        
+        # Dampen extreme HOLD dominance from the Q-table (softer compression)
+        hold_q = adjusted_q_values["HOLD"]
+        max_action_q = max(adjusted_q_values["BUY"], adjusted_q_values["SELL"])
+        hold_gap = hold_q - max_action_q
+        if hold_gap > 0.8:
+            # Compress only the excess — HOLD stays preferred but not insurmountable
+            adjusted_q_values["HOLD"] -= (hold_gap - 0.8) * 0.3
         
         # Structured signals from multi-agent analysis
         if structured_signals is not None and len(structured_signals) >= 6:

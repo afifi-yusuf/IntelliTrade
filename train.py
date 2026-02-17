@@ -106,6 +106,9 @@ def train_agent(method='dqn', epochs=50, save_freq=5, train_cutoff_date="2024-01
             print(f"   ⚠️ Failed to load {ticker}: {e}")
 
     valid_tickers = list(financial_data_cache.keys())
+    # Persist quarter summaries across epochs while staying read-only.
+    # Keyed by ticker because each Backtester instance is single-ticker.
+    shared_summary_cache_by_ticker = {ticker: {} for ticker in valid_tickers}
     print(f"   Ready to train on {len(valid_tickers)} tickers.")
     print(f"================================================================================")
 
@@ -145,7 +148,8 @@ def train_agent(method='dqn', epochs=50, save_freq=5, train_cutoff_date="2024-01
                         enable_learning=True,
                         epsilon=display_epsilon, # Passed to backtester but agent might override
                         use_llm_signals=use_llm_signals,
-                        read_only=True # CRITICAL: Do not write to graph during training
+                        read_only=True, # CRITICAL: Do not write to graph during training
+                        summary_cache=shared_summary_cache_by_ticker[ticker]
                     )
                     
                     # INJECT SHARED RESOURCES

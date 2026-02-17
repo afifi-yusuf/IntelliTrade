@@ -189,7 +189,8 @@ class Backtester:
         use_confidence_sizing: bool = True,  # Weight position size by confidence
         use_llm_signals: bool = True,  # If False, run price-only (no LLM/earnings/financial context)
         start_date: Optional[str] = None,  # Start date for backtest (YYYY-MM-DD)
-        read_only: bool = False # Prevent writing to graph
+        read_only: bool = False, # Prevent writing to graph
+        summary_cache: Optional[Dict[str, Dict]] = None  # Optional shared cache (e.g., across training epochs)
     ):
         self.ticker = ticker
         self.initial_capital = initial_capital
@@ -207,7 +208,7 @@ class Backtester:
         self.portfolio = Portfolio(initial_capital, transaction_cost_pct)
         self.vectorizer: Optional[NarrativeVectorizer] = None
         self.rl_agent: Optional[MarkovRLAgent] = None
-        self._summary_cache: Dict[str, Dict] = {}
+        self._summary_cache: Dict[str, Dict] = summary_cache if summary_cache is not None else {}
         
         # Initialize Neo4j handler
         try:

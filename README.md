@@ -1,35 +1,18 @@
-# IntelliSense — Context‑Enriched RAG Trading
+# IntelliSense DQN Workflow (Neo4j Empty -> Populate -> Train -> Inference)
 
-Research prototype that combines LLM analysis, a Neo4j knowledge graph, and RL‑based trading signals. It collects fundamentals, transcripts, technicals, and macro data; generates a quarterly narrative; embeds it; and runs a backtest using fixed Q‑table, Q‑learning, or DQN.
+This README is a practical runbook for the **DQN (LLM-enabled)** path only.
 
-## Core Workflow
-1. **Data ingestion** → CSVs (prices, financials, transcripts, macro).  
-2. **Context building** → quarterly context + historical graph context.  
-3. **LLM analysis** → 1–2 paragraph strategic summary.  
-4. **Embedding** → `all-MiniLM-L6-v2` (384 dims).  
-5. **RL policy** → BUY / HOLD / SELL.  
-6. **Backtest** → portfolio simulation + metrics.
+## 1. Setup
 
-## Research Notes
-- Look‑ahead controls: price history filtered by `current_date`; quarterly data gated by reporting lag; graph context filtered by `max_quarter`; cache validated by generation date.
-- Economic CSVs are filtered to `date <= current_date` but lack release‑calendar metadata.
-- Results are **in‑sample** unless you add a walk‑forward split.
-
-## Setup
+```bash
+cd /Users/yusufafifi/Desktop/IntelliSense
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### Data Fetching
-To collect data for specific tickers, edit the `TICKERS` list in `data.py` and run:
-```bash
-python data.py
-```
-This will fetch daily/weekly prices, financials, and transcripts for all configured tickers (e.g., NVDA, AAPL, MSFT, ...).
-**Note:** This requires an Alpha Vantage Premium key.
+Create `.env` in project root:
 
-Create `.env`:
 ```bash
 AZURE_OPENAI_ENDPOINT=...
 AZURE_OPENAI_API_KEY=...
@@ -41,65 +24,79 @@ NEO4J_PASSWORD=...
 ALPHA_VANTAGE_API_KEY=...
 ```
 
-## Usage
+## 2. (Optional) Fetch / Refresh Market Data
+
+If needed, update tickers in `data.py` and run:
+
 ```bash
-# Compare all methods
-python run.py compare --ticker NVDA
-
-# Single method
-python run.py backtest --method qlearning --ticker NVDA
-
-# RAG only
-python run.py rag --ticker NVDA
+venv/bin/python data.py
 ```
 
-## Outputs
-Backtests write to `backtest_results/`:
-- `trade_log.csv`, `equity_curve.csv`, `performance_summary.txt`
-- saved Q‑tables or DQN checkpoints
+## 3. Start From Empty Neo4j
 
-## Methods
-- **Fixed Q‑table**: heuristic baseline.  
-- **Q‑learning**: tabular RL, coarse state.  
-- **DQN**: neural approximation, higher variance and data‑hungry.
+If your DB is empty, that is fine.  
+You can verify counts in Neo4j Browser:
 
-## Limitations (for research rigor)
-- No walk‑forward validation or multi‑asset splits.  
-- Macro data lacks release calendars and revisions.  
-- **DQN**: neural approximation, sensitive to data volume.
+```cypher
+MATCH (s:Summary) RETURN count(s);
+MATCH (f:Fact) RETURN count(f);
+```
 
-## SOTA DQN Workflow (Walk-Forward)
-To train a robust agent without data leakage:
+## 4. Populate Neo4j Cache (DQN, No Learning)
 
-1. **Train on Past (2020-2023)**:
+Run one populate pass so quarterly summaries/facts are written to Neo4j.
+
 ```bash
-python train_dqn.py --epochs 50 --cutoff 2024-01-01
+cd /Users/yusufafifi/Desktop/IntelliSense
+for t in MSFT AMZN TSLA TSM ASML NVDA GOOGL META AAPL; do
+  venv/bin/python run.py backtest --method dqn --ticker "$t" --no-learning --no-save
+done
 ```
-This saves the "brain" to `backtest_results/dqn_model_walkforward_final.pth`.
 
-2. **Test on Future (2024-Present)**:
+What this does:
+- Uses DQN with LLM/context path enabled.
+- Writes graph cache (`Summary`, `Fact`, etc.) because backtest runs with write mode by default.
+- Does **not** train or save model weights (`--no-learning --no-save`).
+
+## 5. Train DQN (Walk-Forward Style)
+
+Train on data before cutoff:
+
 ```bash
-python run.py backtest --method dqn --ticker NVDA --no-learning --load-model backtest_results/dqn_model_walkforward_final.pth --start-date 2024-01-01
+cd /Users/yusufafifi/Desktop/IntelliSense
+venv/bin/python run.py train --method dqn --epochs 50 --cutoff 2024-01-01
 ```
 
-## Limitations (for research rigor)
+Expected output checkpoint:
 
-## Project Map
-```
-run.py            # CLI entry point
-backtest.py       # simulation engine
-main.py           # RAG pipeline
-graph_manager.py  # Neo4j context/cache
-rl_agent.py       # Q-learning
-dqn_agent.py      # DQN
-vectorizer.py     # embeddings/sentiment
-data.py           # Alpha Vantage collection
-data/             # CSVs
+`/Users/yusufafifi/Desktop/IntelliSense/backtest_results/dqn_model_walkforward_final.pth`
+
+## 6. Inference / Backtest DQN (No Learning)
+
+Run inference from 2024 onward with trained model:
+
+```bash
+cd /Users/yusufafifi/Desktop/IntelliSense
+venv/bin/python run.py backtest \
+  --method dqn \
+  --ticker NVDA \
+  --no-learning \
+  --load-model /Users/yusufafifi/Desktop/IntelliSense/backtest_results/dqn_model_walkforward_final.pth \
+  --start-date 2024-01-01
 ```
 
-### Customizing Tickers
-To run the RAG pipeline (`main.py`) for different tickers, update the `tickers` list in `main.py`:
-```python
-tickers = ["NVDA", "AAPL", "MSFT", ...]
-```
-Ensure you have fetched data for these tickers first using `data.py`.
+## 7. Where Results Are Saved
+
+Backtest artifacts are written under:
+
+`/Users/yusufafifi/Desktop/IntelliSense/backtest_results/`
+
+Comparison/test history files are written under:
+
+`/Users/yusufafifi/Desktop/IntelliSense/test_results/`
+
+## Notes
+
+- `read_only=True` mode is used for safe evaluation/compare paths; it reads cache but does not write Neo4j.
+- For first-time population on an empty DB, use `run.py backtest --method dqn ... --no-learning --no-save` as shown above.
+- If you change prompt/schema/agent logic significantly, repopulate Neo4j before retraining.

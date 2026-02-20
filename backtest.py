@@ -79,6 +79,7 @@ class Portfolio:
         self.initial_capital = initial_capital
         self.cash = initial_capital
         self.shares = 0.0
+        self.avg_entry_price: Optional[float] = None
         self.transaction_cost_pct = transaction_cost_pct
         self.trade_history: List[Trade] = []
         
@@ -125,12 +126,20 @@ class Portfolio:
             shares_traded = np.floor(max_shares)  # Can only buy whole shares
             
             if shares_traded > 0:
+                prev_shares = self.shares
                 cost = shares_traded * current_price
                 transaction_cost = cost * self.transaction_cost_pct
                 total_cost = cost + transaction_cost
                 
                 self.cash -= total_cost
                 self.shares += shares_traded
+                if self.shares > 0:
+                    if self.avg_entry_price is None or prev_shares <= 0:
+                        self.avg_entry_price = float(current_price)
+                    else:
+                        self.avg_entry_price = float(
+                            ((self.avg_entry_price * prev_shares) + (current_price * shares_traded)) / self.shares
+                        )
                 trade_value = cost
                 executed = True
                 
@@ -146,6 +155,8 @@ class Portfolio:
                 
                 self.cash += net_proceeds
                 self.shares -= shares_traded
+                if self.shares <= 0:
+                    self.avg_entry_price = None
                 trade_value = proceeds
                 executed = True
         
@@ -188,6 +199,7 @@ class Backtester:
 
         use_confidence_sizing: bool = True,  # Weight position size by confidence
         use_llm_signals: bool = True,  # If False, run price-only (no LLM/earnings/financial context)
+        stop_loss_pct: float = 0.0,  # Inference-only stop-loss (e.g., 0.10 = 10%)
         start_date: Optional[str] = None,  # Start date for backtest (YYYY-MM-DD)
         read_only: bool = False, # Prevent writing to graph
         summary_cache: Optional[Dict[str, Dict]] = None  # Optional shared cache (e.g., across training epochs)
@@ -202,6 +214,7 @@ class Backtester:
         self.epsilon = epsilon
         self.use_confidence_sizing = use_confidence_sizing
         self.use_llm_signals = use_llm_signals
+        self.stop_loss_pct = float(np.clip(stop_loss_pct, 0.0, 0.95))
         self.start_date = start_date
         self.read_only = read_only
         
@@ -681,6 +694,8 @@ class Backtester:
         logger.info(f"📊 Ticker: {self.ticker}")
         logger.info(f"📅 Rebalance Frequency: {self.rebalance_frequency}")
         logger.info(f"💸 Transaction Cost: {self.transaction_cost_pct * 100:.3f}%")
+        if (not self.enable_learning) and self.stop_loss_pct > 0:
+            logger.info(f"🛑 Inference Stop-Loss: {self.stop_loss_pct * 100:.1f}% below avg entry")
         logger.info("")
         
         trading_dates = self.get_trading_dates()
@@ -726,15 +741,44 @@ class Backtester:
             total_value = portfolio_value_before if portfolio_value_before > 0 else 1.0
             position_ratio = stock_value / total_value
             position_state = "LONG" if self.portfolio.shares > 0.001 else "FLAT"
-            
-            # Generate trading signal
-            signal = self.generate_signal_for_date(
-                date,
-                price_history,
-                financial_data,
-                position_ratio=position_ratio,
-                position_state=position_state
-            )
+
+            # Inference-only stop-loss override.
+            # If active and in position, force SELL when price falls below threshold from avg entry.
+            stop_triggered = False
+            if (
+                (not self.enable_learning)
+                and self.stop_loss_pct > 0.0
+                and position_state == "LONG"
+                and self.portfolio.avg_entry_price is not None
+            ):
+                stop_price = self.portfolio.avg_entry_price * (1.0 - self.stop_loss_pct)
+                if current_price <= stop_price:
+                    stop_triggered = True
+                    signal = {
+                        "action": "SELL",
+                        "confidence": 1.0,
+                        "narrative_state": 1,
+                        "financial_state": 1,
+                        "rationale": (
+                            f"Stop-loss triggered: price ${current_price:.2f} <= "
+                            f"${stop_price:.2f} ({self.stop_loss_pct * 100:.1f}% below avg entry)."
+                        ),
+                        "llm_analysis": "Inference stop-loss override"
+                    }
+                else:
+                    signal = None
+            else:
+                signal = None
+
+            if signal is None:
+                # Generate trading signal
+                signal = self.generate_signal_for_date(
+                    date,
+                    price_history,
+                    financial_data,
+                    position_ratio=position_ratio,
+                    position_state=position_state
+                )
 
             # Hard guard for atomic long-only transitions, regardless of model output:
             # FLAT: BUY/HOLD only, LONG: SELL/HOLD only.
@@ -744,7 +788,9 @@ class Backtester:
                 signal['action'] = "HOLD"
             
             # Calculate position size based on confidence
-            if isinstance(self.rl_agent, DQNAgent):
+            if stop_triggered:
+                position_size = 1.0
+            elif isinstance(self.rl_agent, DQNAgent):
                 # Atomic all-in/all-out for DQN.
                 position_size = 1.0
             elif self.use_confidence_sizing:

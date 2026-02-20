@@ -43,6 +43,7 @@ def run_backtest(
     enable_learning: bool = True,
     save_model: bool = True,
     use_confidence_sizing: bool = True,
+    stop_loss_pct: float = 0.0,
     model_path: Optional[str] = None,
     start_date: Optional[str] = None,
     read_only: bool = False
@@ -58,6 +59,8 @@ def run_backtest(
     print(f"  Initial Capital: ${initial_capital:,.2f}")
     print(f"  Method: {method}")
     print(f"  Position Sizing: {'Confidence-weighted (10-100%)' if use_confidence_sizing else 'All-in/all-out (100%)'}")
+    if stop_loss_pct > 0:
+        print(f"  Stop-Loss: {stop_loss_pct * 100:.1f}% (applies only when learning is disabled)")
     
     if method in ['qlearning', 'dqn', 'dqn_nollm']:
         print(f"  Learning Enabled: {enable_learning}")
@@ -72,6 +75,7 @@ def run_backtest(
         epsilon=epsilon,
         use_confidence_sizing=use_confidence_sizing,
         use_llm_signals=(method != 'dqn_nollm'),
+        stop_loss_pct=stop_loss_pct,
         start_date=start_date,
         read_only=read_only
     )
@@ -169,7 +173,7 @@ def run_training(method: str, epochs: int, cutoff: str):
     """Run training for specified method"""
     train_agent(method=method, epochs=epochs, train_cutoff_date=cutoff)
 
-def compare_methods(ticker: str = 'NVDA', initial_capital: float = 10000.0):
+def compare_methods(ticker: str = 'NVDA', initial_capital: float = 10000.0, stop_loss_pct: float = 0.0):
     """Compare DQN variants only: DQN and DQN price-only."""
     
     print(f"\n{'='*80}")
@@ -198,6 +202,7 @@ def compare_methods(ticker: str = 'NVDA', initial_capital: float = 10000.0):
             enable_learning=False, # Testing mode
             save_model=False,
             use_confidence_sizing=True,
+            stop_loss_pct=stop_loss_pct,
             start_date='2024-01-01',
             read_only=True
         )
@@ -224,6 +229,7 @@ def compare_methods(ticker: str = 'NVDA', initial_capital: float = 10000.0):
             enable_learning=False,  # Testing mode
             save_model=False,
             use_confidence_sizing=True,
+            stop_loss_pct=stop_loss_pct,
             start_date='2024-01-01',
             read_only=True
         )
@@ -325,6 +331,7 @@ Examples:
     parser_backtest.add_argument('--no-learning', action='store_true')
     parser_backtest.add_argument('--no-save', action='store_true')
     parser_backtest.add_argument('--no-confidence-sizing', action='store_true')
+    parser_backtest.add_argument('--stop-loss-pct', type=float, default=0.0, help='Inference-only stop-loss as decimal (e.g., 0.10)')
     parser_backtest.add_argument('--load-model', help='Path to pre-trained model')
     parser_backtest.add_argument('--start-date', help='Start date (YYYY-MM-DD)')
     
@@ -332,10 +339,12 @@ Examples:
     parser_compare = subparsers.add_parser('compare', help='Compare all methods')
     parser_compare.add_argument('--ticker', default='NVDA', help='Stock ticker')
     parser_compare.add_argument('--capital', type=float, default=10000.0)
+    parser_compare.add_argument('--stop-loss-pct', type=float, default=0.0, help='Inference-only stop-loss as decimal (e.g., 0.10)')
     
     # Quickstart
     parser_quickstart = subparsers.add_parser('quickstart', help='Compare methods')
     parser_quickstart.add_argument('--ticker', default='NVDA')
+    parser_quickstart.add_argument('--stop-loss-pct', type=float, default=0.0, help='Inference-only stop-loss as decimal (e.g., 0.10)')
     
     args = parser.parse_args()
     
@@ -363,12 +372,13 @@ Examples:
             enable_learning=not args.no_learning,
             save_model=not args.no_save,
             use_confidence_sizing=not args.no_confidence_sizing,
+            stop_loss_pct=args.stop_loss_pct,
             model_path=args.load_model,
             start_date=args.start_date
         )
     
     elif args.command == 'compare' or args.command == 'quickstart':
-        compare_methods(args.ticker, args.capital)
+        compare_methods(args.ticker, args.capital, args.stop_loss_pct)
 
 if __name__ == "__main__":
     main()

@@ -87,7 +87,7 @@ def run_backtest(
         
         # Derive state dimension from embedding + features
         vectorizer = NarrativeVectorizer(model_name='all-MiniLM-L6-v2')
-        state_dim = vectorizer.embedding_dim + 7 + 3 + 2 + 1 + 6 + 5  # +6 structured signals, +5 context reliability
+        state_dim = vectorizer.embedding_dim + 7 + 3 + 2 + 1 + 6 + 6 + 5  # +6 structured signals, +6 signal deltas, +5 context reliability
         
         backtester.rl_agent = DQNAgent(
             state_dim=state_dim,

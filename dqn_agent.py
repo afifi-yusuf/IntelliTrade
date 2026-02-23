@@ -37,6 +37,7 @@ class DQNNetwork(nn.Module):
         self.financial_cat_dim = 2
         self.position_dim = 1
         self.structured_signal_dim = 6
+        self.signal_delta_dim = 6
         self.context_meta_dim = 5
         self.expected_state_dim = (
             self.embedding_dim
@@ -45,11 +46,18 @@ class DQNNetwork(nn.Module):
             + self.financial_cat_dim
             + self.position_dim
             + self.structured_signal_dim
+            + self.signal_delta_dim
             + self.context_meta_dim
         )
 
         self.price_input_dim = self.tech_dim + self.financial_cat_dim + self.position_dim
-        self.context_input_dim = self.embedding_dim + self.narrative_cat_dim + self.structured_signal_dim + self.context_meta_dim
+        self.context_input_dim = (
+            self.embedding_dim
+            + self.narrative_cat_dim
+            + self.structured_signal_dim
+            + self.signal_delta_dim
+            + self.context_meta_dim
+        )
 
         # Learned attention over structured signals
         self.signal_attention = nn.Sequential(
@@ -121,13 +129,19 @@ class DQNNetwork(nn.Module):
         idx += self.position_dim
         structured_signals = state[:, idx:idx + self.structured_signal_dim]
         idx += self.structured_signal_dim
+        signal_deltas = state[:, idx:idx + self.signal_delta_dim]
+        idx += self.signal_delta_dim
         context_meta = state[:, idx:idx + self.context_meta_dim]
 
         attention_weights = self.signal_attention(structured_signals)
         weighted_signals = structured_signals * attention_weights
+        weighted_deltas = signal_deltas * attention_weights
 
         price_input = torch.cat([tech_features, financial_onehot, position_ratio], dim=-1)
-        context_input = torch.cat([narrative_embedding, narrative_onehot, weighted_signals, context_meta], dim=-1)
+        context_input = torch.cat(
+            [narrative_embedding, narrative_onehot, weighted_signals, weighted_deltas, context_meta],
+            dim=-1
+        )
 
         price_latent = self.price_branch(price_input)
         context_latent = self.context_branch(context_input)
@@ -202,6 +216,7 @@ class DQNAgent:
         self.financial_cat_dim = 2
         self.position_dim = 1
         self.structured_signal_dim = 6
+        self.signal_delta_dim = 6
         self.context_meta_dim = 5
 
         if embedding_dim is None:
@@ -211,6 +226,7 @@ class DQNAgent:
                 + self.financial_cat_dim
                 + self.position_dim
                 + self.structured_signal_dim
+                + self.signal_delta_dim
                 + self.context_meta_dim
             ))
         self.embedding_dim = int(embedding_dim)
@@ -221,6 +237,7 @@ class DQNAgent:
             + self.financial_cat_dim
             + self.position_dim
             + self.structured_signal_dim
+            + self.signal_delta_dim
             + self.context_meta_dim
         )
         self.action_dim = action_dim
@@ -272,12 +289,15 @@ class DQNAgent:
                          financial_state: int,
                          position_ratio: float = 0.0,
                          structured_signals: np.ndarray = None,
+                         structured_signal_deltas: np.ndarray = None,
                          context_meta: np.ndarray = None) -> np.ndarray:
         """
         Combine all state information into a single vector
         
         Returns:
-            State vector: [narrative_embedding, technical_features, categorical_features, position_ratio, structured_signals]
+            State vector:
+            [narrative_embedding, technical_features, categorical_features,
+             position_ratio, structured_signals, structured_signal_deltas, context_meta]
         """
         # Ensure narrative_vector is 1-dimensional
         narrative_vector = np.atleast_1d(narrative_vector).astype(np.float32)
@@ -331,6 +351,12 @@ class DQNAgent:
             state_parts.append(np.array(structured_signals[:6], dtype=np.float32))
         else:
             state_parts.append(np.zeros(6, dtype=np.float32))
+
+        # Temporal deltas for structured signals (6 features)
+        if structured_signal_deltas is not None and len(structured_signal_deltas) >= self.signal_delta_dim:
+            state_parts.append(np.array(structured_signal_deltas[:self.signal_delta_dim], dtype=np.float32))
+        else:
+            state_parts.append(np.zeros(self.signal_delta_dim, dtype=np.float32))
 
         # Context quality/reliability metadata (5 features)
         if context_meta is not None and len(context_meta) >= self.context_meta_dim:
@@ -469,6 +495,7 @@ class DQNAgent:
                    financial_state: int = None,
                    position_ratio: float = 0.0,
                    structured_signals: np.ndarray = None,
+                   structured_signal_deltas: np.ndarray = None,
                    context_meta: np.ndarray = None,
                    position_state: str = "FLAT",
                    explore: bool = False) -> dict:
@@ -495,6 +522,7 @@ class DQNAgent:
             narrative_vector, stock_features, narrative_state, financial_state,
             position_ratio=position_ratio,
             structured_signals=structured_signals,
+            structured_signal_deltas=structured_signal_deltas,
             context_meta=context_meta
         )
         
@@ -634,6 +662,7 @@ class DQNAgent:
             'losses': self.losses,
             'state_dim': self.state_dim,
             'embedding_dim': self.embedding_dim,
+            'signal_delta_dim': self.signal_delta_dim,
             'context_meta_dim': self.context_meta_dim
         }, filepath)
         print(f"💾 DQN model saved to {filepath}")

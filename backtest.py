@@ -393,6 +393,71 @@ class Backtester:
             float(np.clip(reliability.get("evidence_strength", 0.0), 0.0, 1.0)),
             float(np.clip(reliability.get("parse_success", 0.0), 0.0, 1.0)),
         ], dtype=np.float32)
+
+    def _signals_to_array(self, signals_payload) -> np.ndarray:
+        """Normalize structured signal payload into ordered 6-dim vector."""
+        if isinstance(signals_payload, dict):
+            return np.array([
+                float(signals_payload.get("revenue_trend", 0.0)),
+                float(signals_payload.get("margin_trend", 0.0)),
+                float(signals_payload.get("peer_relative", 0.0)),
+                float(signals_payload.get("historical_momentum", 0.0)),
+                float(signals_payload.get("risk_level", 0.5)),
+                float(signals_payload.get("overall_sentiment", 0.0))
+            ], dtype=np.float32)
+        if isinstance(signals_payload, (list, tuple, np.ndarray)) and len(signals_payload) >= 6:
+            return np.array(signals_payload[:6], dtype=np.float32)
+        return np.zeros(6, dtype=np.float32)
+
+    def _load_quarter_signals(self, quarter_id: str, as_of_date: datetime) -> np.ndarray:
+        """
+        Load structured signals for a given quarter from in-memory cache or graph.
+        Guard against cached summaries generated after `as_of_date`.
+        """
+        cached_summary = self._summary_cache.get(quarter_id)
+        if cached_summary is None and self.graph_db:
+            cached_summary = self.graph_db.retrieve_quarterly_summary(self.ticker, quarter_id)
+            if cached_summary:
+                self._summary_cache[quarter_id] = cached_summary
+
+        if not cached_summary:
+            return np.zeros(6, dtype=np.float32)
+
+        generated = cached_summary.get("generated_for_date")
+        if generated:
+            try:
+                generated_dt = datetime.fromisoformat(str(generated))
+                if generated_dt > as_of_date:
+                    return np.zeros(6, dtype=np.float32)
+            except Exception:
+                return np.zeros(6, dtype=np.float32)
+
+        return self._signals_to_array(cached_summary.get("structured_signals", {}))
+
+    def _compute_signal_deltas(
+        self,
+        available_quarters: List[str],
+        recent_quarter: str,
+        current_signals: np.ndarray,
+        as_of_date: datetime
+    ) -> np.ndarray:
+        """
+        Compute temporal LLM feature deltas (current quarter structured signals minus previous available quarter).
+        """
+        if len(available_quarters) < 2:
+            return np.zeros(6, dtype=np.float32)
+
+        prev_quarter = available_quarters[-2]
+        if prev_quarter == recent_quarter:
+            return np.zeros(6, dtype=np.float32)
+
+        prev_signals = self._load_quarter_signals(prev_quarter, as_of_date=as_of_date)
+        if prev_signals.shape[0] < 6:
+            prev_signals = np.zeros(6, dtype=np.float32)
+
+        deltas = np.array(current_signals[:6], dtype=np.float32) - np.array(prev_signals[:6], dtype=np.float32)
+        # Keep outlier safety without destroying signal directionality.
+        return np.clip(deltas, -2.0, 2.0).astype(np.float32)
     
     def generate_signal_for_date(
         self,
@@ -434,6 +499,7 @@ class Backtester:
                 # and no structured multi-agent signals.
                 embedding = np.zeros(self.vectorizer.embedding_dim, dtype=np.float64)
                 structured_signals = np.zeros(6, dtype=np.float32)
+                structured_signal_deltas = np.zeros(6, dtype=np.float32)
                 context_meta = np.zeros(5, dtype=np.float32)
                 narrative_state = 1
                 financial_state = 0
@@ -451,6 +517,7 @@ class Backtester:
                 if isinstance(self.rl_agent, DQNAgent):
                     signal_kwargs["financial_state"] = financial_state
                     signal_kwargs["context_meta"] = context_meta
+                    signal_kwargs["structured_signal_deltas"] = structured_signal_deltas
                     signal_kwargs['explore'] = self.enable_learning
                     signal_kwargs['position_state'] = position_state
 
@@ -511,19 +578,7 @@ class Backtester:
                     embedding = np.array(cached_summary['embedding'], dtype=np.float64)
                     reliability = cached_summary.get("reliability", reliability)
                     cached_signals = cached_summary.get("structured_signals", {})
-                    if isinstance(cached_signals, dict):
-                        structured_signals = np.array([
-                            float(cached_signals.get("revenue_trend", 0.0)),
-                            float(cached_signals.get("margin_trend", 0.0)),
-                            float(cached_signals.get("peer_relative", 0.0)),
-                            float(cached_signals.get("historical_momentum", 0.0)),
-                            float(cached_signals.get("risk_level", 0.5)),
-                            float(cached_signals.get("overall_sentiment", 0.0))
-                        ], dtype=np.float32)
-                    elif isinstance(cached_signals, (list, tuple, np.ndarray)) and len(cached_signals) >= 6:
-                        structured_signals = np.array(cached_signals[:6], dtype=np.float32)
-                    else:
-                        structured_signals = np.zeros(6, dtype=np.float32)
+                    structured_signals = self._signals_to_array(cached_signals)
                 else:
                     # Cache miss - use MULTI-AGENT pipeline
                     is_new_quarter = True
@@ -631,6 +686,12 @@ class Backtester:
                     "agent_confidences": {}
                 }
 
+            structured_signal_deltas = self._compute_signal_deltas(
+                available_quarters=available_quarters,
+                recent_quarter=recent_quarter,
+                current_signals=structured_signals,
+                as_of_date=date
+            )
             context_meta = self._build_context_meta(
                 current_date=date,
                 quarter_id=recent_quarter,
@@ -643,7 +704,10 @@ class Backtester:
             
             # Debug: Print sentiment analysis occasionally
             if np.random.random() < 0.1:  # 10% of trades
-                print(f"   🔍 DEBUG | Quarter: {recent_quarter} | State: {narrative_state} (0=Bull, 1=Neut, 2=Bear) | Signals: {structured_signals}")
+                print(
+                    f"   🔍 DEBUG | Quarter: {recent_quarter} | State: {narrative_state} "
+                    f"(0=Bull, 1=Neut, 2=Bear) | Signals: {structured_signals} | ΔSignals: {structured_signal_deltas}"
+                )
             
             # Generate RL signal
             signal_kwargs = dict(
@@ -659,6 +723,7 @@ class Backtester:
             from dqn_agent import DQNAgent
             if isinstance(self.rl_agent, DQNAgent):
                 signal_kwargs["context_meta"] = context_meta
+                signal_kwargs["structured_signal_deltas"] = structured_signal_deltas
                 signal_kwargs['explore'] = self.enable_learning
                 signal_kwargs['position_state'] = position_state
             

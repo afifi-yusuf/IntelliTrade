@@ -20,6 +20,15 @@ from llm import fetch_financial_metrics
 from llm import main as run_main_agent
 from train import train_agent
 
+def _walkforward_model_path(model_prefix: str, rebalance_frequency: str = 'weekly') -> str:
+    """Resolve default walk-forward model path for a frequency."""
+    if rebalance_frequency == 'weekly':
+        return f'backtest_results/{model_prefix}_walkforward_final.pth'
+    if model_prefix.endswith('_model'):
+        base = model_prefix[:-6]
+        return f'backtest_results/{base}_{rebalance_frequency}_model_walkforward_final.pth'
+    return f'backtest_results/{model_prefix}_{rebalance_frequency}_walkforward_final.pth'
+
 
 def collect_data(ticker: str, api_key: Optional[str] = None):
     """Collect financial data from Alpha Vantage"""
@@ -46,6 +55,7 @@ def run_backtest(
     stop_loss_pct: float = 0.0,
     model_path: Optional[str] = None,
     start_date: Optional[str] = None,
+    rebalance_frequency: str = 'weekly',
     read_only: bool = False
 ):
     """Run backtest with specified method"""
@@ -58,23 +68,26 @@ def run_backtest(
     print(f"  Ticker: {ticker}")
     print(f"  Initial Capital: ${initial_capital:,.2f}")
     print(f"  Method: {method}")
+    print(f"  Rebalance Frequency: {rebalance_frequency}")
     print(f"  Position Sizing: {'Confidence-weighted (10-100%)' if use_confidence_sizing else 'All-in/all-out (100%)'}")
     if stop_loss_pct > 0:
         print(f"  Stop-Loss: {stop_loss_pct * 100:.1f}% (applies only when learning is disabled)")
     
     if method in ['qlearning', 'dqn', 'dqn_nollm']:
         print(f"  Learning Enabled: {enable_learning}")
+    use_llm_signals = method != 'dqn_nollm'
     
     # Initialize backtester
     backtester = Backtester(
         ticker=ticker,
         initial_capital=initial_capital,
+        rebalance_frequency=rebalance_frequency,
         enable_learning=enable_learning if method != 'fixed' else False,
         learning_rate=learning_rate,
         discount_factor=discount_factor,
         epsilon=epsilon,
         use_confidence_sizing=use_confidence_sizing,
-        use_llm_signals=(method != 'dqn_nollm'),
+        use_llm_signals=use_llm_signals,
         stop_loss_pct=stop_loss_pct,
         start_date=start_date,
         read_only=read_only
@@ -87,7 +100,7 @@ def run_backtest(
         
         # Derive state dimension from embedding + features
         vectorizer = NarrativeVectorizer(model_name='all-MiniLM-L6-v2')
-        state_dim = vectorizer.embedding_dim + 7 + 3 + 2 + 1 + 6 + 6 + 5  # +6 structured signals, +6 signal deltas, +5 context reliability
+        state_dim = vectorizer.embedding_dim + 7 + 3 + 2 + 1 + 6 + 6 + 5  # +7 technical features, +6 structured signals, +6 signal deltas, +5 context reliability
         
         backtester.rl_agent = DQNAgent(
             state_dim=state_dim,
@@ -169,11 +182,21 @@ def run_backtest(
     
     return metrics
 
-def run_training(method: str, epochs: int, cutoff: str):
+def run_training(method: str, epochs: int, cutoff: str, rebalance_frequency: str = 'weekly'):
     """Run training for specified method"""
-    train_agent(method=method, epochs=epochs, train_cutoff_date=cutoff)
+    train_agent(
+        method=method,
+        epochs=epochs,
+        train_cutoff_date=cutoff,
+        rebalance_frequency=rebalance_frequency
+    )
 
-def compare_methods(ticker: str = 'NVDA', initial_capital: float = 10000.0, stop_loss_pct: float = 0.0):
+def compare_methods(
+    ticker: str = 'NVDA',
+    initial_capital: float = 10000.0,
+    stop_loss_pct: float = 0.0,
+    rebalance_frequency: str = 'weekly'
+):
     """Compare DQN variants only: DQN and DQN price-only."""
     
     print(f"\n{'='*80}")
@@ -186,7 +209,7 @@ def compare_methods(ticker: str = 'NVDA', initial_capital: float = 10000.0, stop
     print(f"\n{'─'*80}")
     print("1/2: Deep Q-Network (DQN) (Pre-trained)")
     print(f"{'─'*80}")
-    dqn_model = 'backtest_results/dqn_model_walkforward_final.pth'
+    dqn_model = _walkforward_model_path('dqn_model', rebalance_frequency)
     if not os.path.exists(dqn_model):
         print("⚠️ No pre-trained DQN model found at default path. Using untrained agent.")
         dqn_model = None
@@ -204,6 +227,7 @@ def compare_methods(ticker: str = 'NVDA', initial_capital: float = 10000.0, stop
             use_confidence_sizing=True,
             stop_loss_pct=stop_loss_pct,
             start_date='2024-01-01',
+            rebalance_frequency=rebalance_frequency,
             read_only=True
         )
     except Exception as e:
@@ -213,7 +237,7 @@ def compare_methods(ticker: str = 'NVDA', initial_capital: float = 10000.0, stop
     print(f"\n{'─'*80}")
     print("2/2: Deep Q-Network (Price-Only, No LLM) (Pre-trained)")
     print(f"{'─'*80}")
-    dqn_nollm_model = 'backtest_results/dqn_nollm_model_walkforward_final.pth'
+    dqn_nollm_model = _walkforward_model_path('dqn_nollm_model', rebalance_frequency)
     if not os.path.exists(dqn_nollm_model):
         print("⚠️ No pre-trained DQN No-LLM model found at default path. Using untrained agent.")
         dqn_nollm_model = None
@@ -231,6 +255,7 @@ def compare_methods(ticker: str = 'NVDA', initial_capital: float = 10000.0, stop
             use_confidence_sizing=True,
             stop_loss_pct=stop_loss_pct,
             start_date='2024-01-01',
+            rebalance_frequency=rebalance_frequency,
             read_only=True
         )
     except Exception as e:
@@ -320,6 +345,7 @@ Examples:
     parser_train.add_argument('--method', choices=['dqn', 'dqn_nollm', 'qlearning'], default='dqn', help='RL Method')
     parser_train.add_argument('--epochs', type=int, default=50, help='Number of epochs')
     parser_train.add_argument('--cutoff', type=str, default="2024-01-01", help='Training Cutoff Date')
+    parser_train.add_argument('--rebalance-frequency', choices=['daily', 'weekly', 'monthly'], default='weekly', help='Trading decision frequency')
 
     # Backtest
     parser_backtest = subparsers.add_parser('backtest', help='Run backtest')
@@ -334,17 +360,20 @@ Examples:
     parser_backtest.add_argument('--stop-loss-pct', type=float, default=0.0, help='Inference-only stop-loss as decimal (e.g., 0.10)')
     parser_backtest.add_argument('--load-model', help='Path to pre-trained model')
     parser_backtest.add_argument('--start-date', help='Start date (YYYY-MM-DD)')
+    parser_backtest.add_argument('--rebalance-frequency', choices=['daily', 'weekly', 'monthly'], default='weekly', help='Trading decision frequency')
     
     # Compare methods
     parser_compare = subparsers.add_parser('compare', help='Compare all methods')
     parser_compare.add_argument('--ticker', default='NVDA', help='Stock ticker')
     parser_compare.add_argument('--capital', type=float, default=10000.0)
     parser_compare.add_argument('--stop-loss-pct', type=float, default=0.0, help='Inference-only stop-loss as decimal (e.g., 0.10)')
+    parser_compare.add_argument('--rebalance-frequency', choices=['daily', 'weekly', 'monthly'], default='weekly', help='Trading decision frequency')
     
     # Quickstart
     parser_quickstart = subparsers.add_parser('quickstart', help='Compare methods')
     parser_quickstart.add_argument('--ticker', default='NVDA')
     parser_quickstart.add_argument('--stop-loss-pct', type=float, default=0.0, help='Inference-only stop-loss as decimal (e.g., 0.10)')
+    parser_quickstart.add_argument('--rebalance-frequency', choices=['daily', 'weekly', 'monthly'], default='weekly', help='Trading decision frequency')
     
     args = parser.parse_args()
     
@@ -360,7 +389,7 @@ Examples:
         run_rag_pipeline(args.ticker)
         
     elif args.command == 'train':
-        run_training(args.method, args.epochs, args.cutoff)
+        run_training(args.method, args.epochs, args.cutoff, args.rebalance_frequency)
     
     elif args.command == 'backtest':
         run_backtest(
@@ -374,11 +403,12 @@ Examples:
             use_confidence_sizing=not args.no_confidence_sizing,
             stop_loss_pct=args.stop_loss_pct,
             model_path=args.load_model,
-            start_date=args.start_date
+            start_date=args.start_date,
+            rebalance_frequency=args.rebalance_frequency
         )
     
     elif args.command == 'compare' or args.command == 'quickstart':
-        compare_methods(args.ticker, args.capital, args.stop_loss_pct)
+        compare_methods(args.ticker, args.capital, args.stop_loss_pct, args.rebalance_frequency)
 
 if __name__ == "__main__":
     main()

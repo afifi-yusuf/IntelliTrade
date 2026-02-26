@@ -33,13 +33,19 @@ def suppress_stdout():
         finally:
             sys.stdout = old_stdout
 
-def train_agent(method='dqn', epochs=50, save_freq=5, train_cutoff_date="2024-01-01"):
+def train_agent(
+    method='dqn',
+    epochs=50,
+    save_freq=5,
+    train_cutoff_date="2024-01-01",
+    rebalance_frequency: str = "weekly"
+):
     """
     Unified training loop for RL agents (DQN or Q-Learning).
     
     METHODOLOGY (SOTA):
     - Strict Time-Series Split: Train on data BEFORE cutoff, Test on data AFTER.
-    - Read-Only Graph: Ensures no accidental data corruption during training.
+    - Cache Warmup: Epoch 1 may persist quarter summaries; later epochs run read-only.
     """
     print(f"🚀 INITIALIZING {method.upper()} PRE-TRAINING (WALK-FORWARD)")
     print(f"================================================================================")
@@ -47,17 +53,20 @@ def train_agent(method='dqn', epochs=50, save_freq=5, train_cutoff_date="2024-01
     print(f"   Method: Strict Time-Series Split")
     print(f"   TRAINING END DATE: {train_cutoff_date}")
     print(f"   Epochs: {epochs}")
+    print(f"   Rebalance Frequency: {rebalance_frequency}")
     print(f"================================================================================")
 
     # 1. Initialize Shared Resources
     print("⏳ Initializing Vectorizer (this takes a moment)...")
     vectorizer = NarrativeVectorizer(model_name='all-MiniLM-L6-v2')
-    state_dim = vectorizer.embedding_dim + 7 + 3 + 2 + 1 + 6 + 6 + 5  # +6 structured signals, +6 signal deltas, +5 context reliability
+    state_dim = vectorizer.embedding_dim + 7 + 3 + 2 + 1 + 6 + 6 + 5  # +7 technical features, +6 structured signals, +6 signal deltas, +5 context reliability
     print(f"   ✅ Vectorizer initialized. Dim: {vectorizer.embedding_dim}")
 
     is_dqn = method in ('dqn', 'dqn_nollm')
     use_llm_signals = method != 'dqn_nollm'
     model_prefix = 'dqn_nollm' if method == 'dqn_nollm' else 'dqn'
+    model_suffix = "" if rebalance_frequency == "weekly" else f"_{rebalance_frequency}"
+    model_prefix_with_freq = f"{model_prefix}{model_suffix}"
 
     # 2. Initialize Agent
     agent = None
@@ -126,8 +135,15 @@ def train_agent(method='dqn', epochs=50, save_freq=5, train_cutoff_date="2024-01
             display_epsilon = current_epsilon
         else:
             display_epsilon = agent.epsilon if hasattr(agent, 'epsilon') else 0.0
+        # Warm Neo4j cache on epoch 1 for LLM-enabled training, then lock to read-only.
+        # This preserves deterministic training data usage while avoiding repeated LLM calls
+        # across restarts once cache has been populated.
+        epoch_read_only = not (use_llm_signals and epoch == 1)
 
         print(f"\n⚡ EPOCH {epoch}/{epochs} (ε={display_epsilon:.3f})")
+        if use_llm_signals:
+            mode = "READ-ONLY (cache reuse)" if epoch_read_only else "CACHE WARMUP (writes enabled)"
+            print(f"   🗄️ Neo4j mode: {mode}")
         random.shuffle(valid_tickers) 
         
         epoch_rewards = []
@@ -145,10 +161,11 @@ def train_agent(method='dqn', epochs=50, save_freq=5, train_cutoff_date="2024-01
                     backtester = Backtester(
                         ticker=ticker,
                         initial_capital=10000.0,
+                        rebalance_frequency=rebalance_frequency,
                         enable_learning=True,
                         epsilon=display_epsilon, # Passed to backtester but agent might override
                         use_llm_signals=use_llm_signals,
-                        read_only=True, # CRITICAL: Do not write to graph during training
+                        read_only=epoch_read_only,
                         summary_cache=shared_summary_cache_by_ticker[ticker]
                     )
                     
@@ -193,19 +210,25 @@ def train_agent(method='dqn', epochs=50, save_freq=5, train_cutoff_date="2024-01
         # Save Checkpoint
         if epoch % save_freq == 0:
             if is_dqn:
-                path = f"{results_dir}/{model_prefix}_model_walkforward_epoch_{epoch}.pth"
+                path = f"{results_dir}/{model_prefix_with_freq}_model_walkforward_epoch_{epoch}.pth"
                 agent.save_model(path)
             else:
-                path = f"{results_dir}/q_table_walkforward_epoch_{epoch}.json"
+                if rebalance_frequency == "weekly":
+                    path = f"{results_dir}/q_table_walkforward_epoch_{epoch}.json"
+                else:
+                    path = f"{results_dir}/q_table_walkforward_{rebalance_frequency}_epoch_{epoch}.json"
                 agent.save_q_table(path)
 
     # Final Save
     if is_dqn:
-        final_path = f"{results_dir}/{model_prefix}_model_walkforward_final.pth"
+        final_path = f"{results_dir}/{model_prefix_with_freq}_model_walkforward_final.pth"
         agent.save_model(final_path)
         print(f"\n✅ TRAINING COMPLETE! Model saved to {final_path}")
     else:
-        final_path = f"{results_dir}/q_table_walkforward_final.json"
+        if rebalance_frequency == "weekly":
+            final_path = f"{results_dir}/q_table_walkforward_final.json"
+        else:
+            final_path = f"{results_dir}/q_table_walkforward_{rebalance_frequency}_final.json"
         agent.save_q_table(final_path)
         print(f"\n✅ TRAINING COMPLETE! Q-Table saved to {final_path}")
 
@@ -214,6 +237,12 @@ if __name__ == "__main__":
     parser.add_argument('--method', choices=['dqn', 'dqn_nollm', 'qlearning'], default='dqn', help='RL Method')
     parser.add_argument('--epochs', type=int, default=50, help='Number of epochs')
     parser.add_argument('--cutoff', type=str, default="2024-01-01", help='Training Data Cutoff Date')
+    parser.add_argument('--rebalance-frequency', choices=['daily', 'weekly', 'monthly'], default='weekly', help='Trading decision frequency')
     args = parser.parse_args()
     
-    train_agent(method=args.method, epochs=args.epochs, train_cutoff_date=args.cutoff)
+    train_agent(
+        method=args.method,
+        epochs=args.epochs,
+        train_cutoff_date=args.cutoff,
+        rebalance_frequency=args.rebalance_frequency
+    )

@@ -38,7 +38,8 @@ def train_agent(
     epochs=50,
     save_freq=5,
     train_cutoff_date="2024-01-01",
-    rebalance_frequency: str = "weekly"
+    rebalance_frequency: str = "weekly",
+    seed: int = None
 ):
     """
     Unified training loop for RL agents (DQN or Q-Learning).
@@ -54,7 +55,24 @@ def train_agent(
     print(f"   TRAINING END DATE: {train_cutoff_date}")
     print(f"   Epochs: {epochs}")
     print(f"   Rebalance Frequency: {rebalance_frequency}")
+    if seed is not None:
+        print(f"   Seed: {seed}")
     print(f"================================================================================")
+
+    if seed is not None:
+        random.seed(seed)
+        np.random.seed(seed)
+        os.environ["PYTHONHASHSEED"] = str(seed)
+        try:
+            import torch
+            torch.manual_seed(seed)
+            if torch.cuda.is_available():
+                torch.cuda.manual_seed_all(seed)
+            if hasattr(torch.backends, "cudnn"):
+                torch.backends.cudnn.deterministic = True
+                torch.backends.cudnn.benchmark = False
+        except Exception:
+            pass
 
     # 1. Initialize Shared Resources
     print("⏳ Initializing Vectorizer (this takes a moment)...")
@@ -238,11 +256,13 @@ if __name__ == "__main__":
     parser.add_argument('--epochs', type=int, default=50, help='Number of epochs')
     parser.add_argument('--cutoff', type=str, default="2024-01-01", help='Training Data Cutoff Date')
     parser.add_argument('--rebalance-frequency', choices=['daily', 'weekly', 'monthly'], default='weekly', help='Trading decision frequency')
+    parser.add_argument('--seed', type=int, default=None, help='Random seed for reproducible training')
     args = parser.parse_args()
     
     train_agent(
         method=args.method,
         epochs=args.epochs,
         train_cutoff_date=args.cutoff,
-        rebalance_frequency=args.rebalance_frequency
+        rebalance_frequency=args.rebalance_frequency,
+        seed=args.seed
     )

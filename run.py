@@ -182,13 +182,14 @@ def run_backtest(
     
     return metrics
 
-def run_training(method: str, epochs: int, cutoff: str, rebalance_frequency: str = 'weekly'):
+def run_training(method: str, epochs: int, cutoff: str, rebalance_frequency: str = 'weekly', seed: int = None):
     """Run training for specified method"""
     train_agent(
         method=method,
         epochs=epochs,
         train_cutoff_date=cutoff,
-        rebalance_frequency=rebalance_frequency
+        rebalance_frequency=rebalance_frequency,
+        seed=seed
     )
 
 def compare_methods(
@@ -346,6 +347,7 @@ Examples:
     parser_train.add_argument('--epochs', type=int, default=50, help='Number of epochs')
     parser_train.add_argument('--cutoff', type=str, default="2024-01-01", help='Training Cutoff Date')
     parser_train.add_argument('--rebalance-frequency', choices=['daily', 'weekly', 'monthly'], default='weekly', help='Trading decision frequency')
+    parser_train.add_argument('--seed', type=int, default=None, help='Random seed for reproducible training')
 
     # Backtest
     parser_backtest = subparsers.add_parser('backtest', help='Run backtest')
@@ -389,7 +391,7 @@ Examples:
         run_rag_pipeline(args.ticker)
         
     elif args.command == 'train':
-        run_training(args.method, args.epochs, args.cutoff, args.rebalance_frequency)
+        run_training(args.method, args.epochs, args.cutoff, args.rebalance_frequency, args.seed)
     
     elif args.command == 'backtest':
         run_backtest(

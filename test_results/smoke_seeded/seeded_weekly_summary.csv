@@ -1,0 +1,3 @@
+ticker,method,runs,return_mean_pct,return_std_pct,final_mean,final_std,sharpe_mean,sharpe_std,win_rate_mean,win_rate_std,max_drawdown_mean,max_drawdown_std
+NVDA,dqn,1,69.17294613770376,,16917.294613770377,,1.8436147639977827,,39.09090909090909,,49.03165033490568,
+NVDA,dqn_nollm,1,178.63570394232974,,27863.570394232975,,2.9627879296403954,,47.27272727272727,,35.10671117723631,

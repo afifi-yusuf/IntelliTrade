@@ -1,0 +1,2 @@
+ticker,dqn_return_mean_pct,dqn_nollm_return_mean_pct,llm_minus_nollm_return_mean_pct
+NVDA,69.17294613770376,178.63570394232974,-109.46275780462598

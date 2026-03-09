@@ -497,8 +497,7 @@ class Backtester:
 
             if not self.use_llm_signals:
                 # Price-only mode: no LLM narrative, no earnings/transcript/economic context,
-                # and no structured multi-agent signals.
-                embedding = np.zeros(self.vectorizer.embedding_dim, dtype=np.float64)
+                # and no structured multi-agent signals. All LLM-derived state dims are zero.
                 structured_signals = np.zeros(6, dtype=np.float32)
                 structured_signal_deltas = np.zeros(6, dtype=np.float32)
                 context_meta = np.zeros(5, dtype=np.float32)
@@ -508,7 +507,6 @@ class Backtester:
 
                 from dqn_agent import DQNAgent
                 signal_kwargs = dict(
-                    narrative_vector=embedding,
                     price_history=price_history,
                     financial_data={},
                     narrative_state=narrative_state,
@@ -699,7 +697,16 @@ class Backtester:
                 reliability=reliability,
                 is_new_quarter=is_new_quarter
             )
-                
+
+            # Staleness decay: fade LLM signals toward zero as earnings age.
+            # Exponential decay with half-life of ~42 days (tau=60).
+            # At day 0 (fresh earnings): decay=1.0.  At day 90: decay≈0.22.
+            report_date = self._quarter_reporting_date(recent_quarter)
+            days_since_report = max(0.0, (date - report_date).days)
+            staleness_decay = float(np.exp(-days_since_report / 60.0))
+            structured_signals = structured_signals * staleness_decay
+            structured_signal_deltas = structured_signal_deltas * staleness_decay
+
             # Get narrative state (uses keyword analysis on text)
             narrative_state = self.vectorizer.get_narrative_state(text=llm_analysis_text)
             
@@ -707,17 +714,17 @@ class Backtester:
             if np.random.random() < 0.1:  # 10% of trades
                 print(
                     f"   🔍 DEBUG | Quarter: {recent_quarter} | State: {narrative_state} "
-                    f"(0=Bull, 1=Neut, 2=Bear) | Signals: {structured_signals} | ΔSignals: {structured_signal_deltas}"
+                    f"(0=Bull, 1=Neut, 2=Bear) | Decay: {staleness_decay:.2f} "
+                    f"| Signals: {structured_signals} | ΔSignals: {structured_signal_deltas}"
                 )
             
             # Generate RL signal
             signal_kwargs = dict(
-                narrative_vector=embedding,
                 price_history=price_history,
                 financial_data=financial_data_pti,
                 narrative_state=narrative_state,
                 position_ratio=position_ratio,
-                structured_signals=structured_signals
+                structured_signals=structured_signals,
             )
             
             # For DQN, also pass explore flag

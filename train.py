@@ -77,8 +77,12 @@ def train_agent(
     # 1. Initialize Shared Resources
     print("⏳ Initializing Vectorizer (this takes a moment)...")
     vectorizer = NarrativeVectorizer(model_name='all-MiniLM-L6-v2')
-    state_dim = vectorizer.embedding_dim + 7 + 3 + 2 + 1 + 6 + 6 + 5  # +7 technical features, +6 structured signals, +6 signal deltas, +5 context reliability
-    print(f"   ✅ Vectorizer initialized. Dim: {vectorizer.embedding_dim}")
+    # State vector: 7 tech + 3 narrative_onehot + 2 financial_onehot + 1 position
+    #             + 6 structured_signals + 6 signal_deltas + 5 context_meta = 30 dims.
+    # The embedding is no longer part of the DQN state; the vectorizer is still
+    # used for narrative-state classification and Neo4j storage.
+    state_dim = 7 + 3 + 2 + 1 + 6 + 6 + 5  # = 30
+    print(f"   ✅ Vectorizer initialized. Dim: {vectorizer.embedding_dim} (embedding NOT in DQN state)")
 
     is_dqn = method in ('dqn', 'dqn_nollm')
     use_llm_signals = method != 'dqn_nollm'
@@ -91,14 +95,13 @@ def train_agent(
     if is_dqn:
         agent = DQNAgent(
             state_dim=state_dim,
-            embedding_dim=vectorizer.embedding_dim,
             learning_rate=0.0005,
-            epsilon=1.0,           
+            epsilon=1.0,
             epsilon_decay=0.995,
             epsilon_min=0.05,
             buffer_size=50000,
             batch_size=64,
-            enable_learning=True
+            enable_learning=True,
         )
     elif method == 'qlearning':
         agent = MarkovRLAgent(

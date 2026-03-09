@@ -95,20 +95,18 @@ def run_backtest(
     
     # For DQN, replace the RL agent
     if method in ('dqn', 'dqn_nollm'):
-        from dqn_agent import DQNAgent
+        from dqn_agent import DQNAgent, STATE_DIM
         from vectorizer import NarrativeVectorizer
-        
-        # Derive state dimension from embedding + features
+
+        # State is now 30-dim (no embedding); vectorizer only needed for narrative
+        # state classification and Neo4j storage inside the backtest pipeline.
         vectorizer = NarrativeVectorizer(model_name='all-MiniLM-L6-v2')
-        state_dim = vectorizer.embedding_dim + 7 + 3 + 2 + 1 + 6 + 6 + 5  # +7 technical features, +6 structured signals, +6 signal deltas, +5 context reliability
-        
+
         backtester.rl_agent = DQNAgent(
-            state_dim=state_dim,
-            embedding_dim=vectorizer.embedding_dim,
             learning_rate=learning_rate,
             discount_factor=discount_factor,
             epsilon=epsilon,
-            enable_learning=enable_learning
+            enable_learning=enable_learning,
         )
         if model_path:
             try:
@@ -117,7 +115,7 @@ def run_backtest(
             except:
                 print(f"⚠️ Could not load model from {model_path}, using fresh agent")
         else:
-            print(f"🧠 Initialized Fresh DQN Agent (state_dim={state_dim})")
+            print(f"🧠 Initialized Fresh DQN Agent (state_dim={STATE_DIM})")
             
     elif method == 'qlearning':
         if model_path:

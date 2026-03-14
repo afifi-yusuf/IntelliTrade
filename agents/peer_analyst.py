@@ -28,23 +28,34 @@ SECTOR_MAP = {
 PEER_GROUPS = {
     "Semiconductors": ["NVDA", "ASML", "TSM"],
     "Big Tech": ["AAPL", "MSFT", "AMZN", "GOOGL", "META"],
-    "AI Beneficiaries": ["NVDA", "MSFT", "GOOGL", "META", "AMZN"],
+    "AI Beneficiaries": ["NVDA", "MSFT", "GOOGL", "META", "AMZN", "TSLA"],
+    # TSLA included in AI/Growth group; FSD/Dojo positions it alongside AI spend leaders
+    "Mega Cap Growth": ["NVDA", "AAPL", "MSFT", "AMZN", "GOOGL", "META", "TSLA", "TSM", "ASML"],
 }
 
-PEER_ANALYSIS_PROMPT = """You are a comparative financial analyst. Compare the target company's 
-current quarter facts against peer company data retrieved from the knowledge graph.
+PEER_ANALYSIS_PROMPT = """You are a comparative financial analyst. Your peer score feeds \
+directly into a quantitative trading model — use the full -1.0 to +1.0 range.
+
+Compare the target company's current quarter facts against peer company data from the knowledge graph.
 
 Analyze:
-1. How does the company perform RELATIVE to peers on key metrics?
-2. Are there sector-wide trends visible across multiple companies?
-3. Is the company an outlier (positive or negative) in any area?
+1. How does the company perform RELATIVE to peers on key metrics (revenue growth rate, margins, EPS)?
+2. Is the company an outlier — positively or negatively — versus its peers?
+3. Are there sector-wide headwinds/tailwinds, and is this company better or worse positioned?
 
-Be specific and quantitative. Reference actual numbers from the peer data.
+Be specific and quantitative. Reference actual numbers.
 Keep your analysis to 150-200 words.
 
-Provide your analysis and then on the LAST line, output a peer_relative_score 
-as a single float between -1.0 (significantly underperforming) and 1.0 (significantly outperforming).
-Format: PEER_SCORE: <float>"""
+SCORE CALIBRATION:
+- +0.8 to +1.0: clear sector leader — materially outperforming peers on multiple metrics
+- +0.3 to +0.7: modest outperformance — ahead on 1-2 metrics
+- -0.1 to +0.2: roughly in-line with peers
+- -0.3 to -0.7: underperforming — behind on key metrics
+- -0.8 to -1.0: clear sector laggard
+Only output 0.0 if peer data is absent or truly insufficient for comparison.
+
+On the LAST line, output the peer score:
+PEER_SCORE: <float>"""
 
 
 class PeerAnalystAgent:

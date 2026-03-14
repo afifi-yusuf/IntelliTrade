@@ -16,8 +16,9 @@ from dotenv import load_dotenv
 load_dotenv()
 logger = logging.getLogger(__name__)
 
-SYNTHESIS_PROMPT = """You are a senior investment strategist synthesizing analyses from multiple 
-specialist agents into a final investment assessment.
+SYNTHESIS_PROMPT = """You are a senior quantitative investment strategist. Your structured signals \
+feed directly into a reinforcement learning trading agent — numerical precision and full range \
+utilisation matter MORE than qualitative hedging.
 
 You will receive:
 - EXTRACTED FACTS: Key financial metrics from the latest earnings call
@@ -25,21 +26,30 @@ You will receive:
 - HISTORICAL TRENDS: Multi-quarter trajectory and momentum
 - MACRO ENVIRONMENT: Current economic conditions
 
-Provide a CONCISE strategic synthesis (200-300 words) that:
-1. Integrates peer comparison with historical context
-2. Identifies the most important signals for trading decisions
-3. Weighs bullish vs bearish factors
+Provide a CONCISE strategic synthesis (150-200 words) focusing on the most actionable findings, \
+then output calibrated signals.
 
-CRITICAL: On the LAST line, provide structured signals as floats between -1.0 and 1.0:
-SIGNALS: revenue_trend=<float> margin_trend=<float> peer_relative=<float> historical_momentum=<float> risk_level=<float> overall_sentiment=<float>
+SIGNAL CALIBRATION RULES — read carefully:
+1. USE THE FULL RANGE. If revenue is accelerating and margins are expanding, score them near +0.8 or \
++0.9, not a cautious +0.2. If fundamentals are genuinely deteriorating, use -0.6 to -0.9.
+2. ANCHOR AGAINST HISTORY. A company growing revenue 4% YoY when it grew 25% last year is a \
+negative revenue_trend (-0.4 to -0.6), not neutral.
+3. BE SPECIFIC. "Revenue beat by 8% and accelerated to 22% YoY vs 14% last quarter" → revenue_trend=+0.75. \
+"Revenue missed and decelerated from 18% to 9% YoY" → revenue_trend=-0.55.
+4. risk_level: 0.5 is average/neutral risk. Only use values below 0.3 for clearly low-risk situations \
+or above 0.7 for genuine elevated risk (guidance cut, regulatory threat, leverage concern).
+5. peer_relative: Only output 0.0 if peer data is genuinely absent — otherwise quantify the gap.
 
-Where:
-- revenue_trend: Revenue growth direction (-1=declining, 1=accelerating)
-- margin_trend: Margin trajectory (-1=compressing, 1=expanding)  
-- peer_relative: Performance vs peers (-1=underperforming, 1=outperforming)
-- historical_momentum: Multi-quarter momentum (-1=decelerating, 1=accelerating)
-- risk_level: Risk assessment (0=low risk, 1=high risk)
-- overall_sentiment: Net bullish/bearish assessment (-1=very bearish, 1=very bullish)"""
+Signal definitions and calibration anchors:
+- revenue_trend:        -0.9=revenue collapsing, -0.5=decelerating, 0=flat/in-line, +0.5=solid beat, +0.9=blowout growth
+- margin_trend:         -0.9=severe compression (-5pp+), -0.4=mild compression, 0=stable, +0.4=modest expansion, +0.9=strong expansion
+- peer_relative:        -0.9=clear sector laggard, -0.4=slight underperform, 0=in-line, +0.4=slight outperform, +0.9=sector leader
+- historical_momentum:  -0.9=multi-quarter deterioration, -0.4=slowing, 0=stable, +0.4=improving, +0.9=strong multi-quarter acceleration
+- risk_level:           0.1=very low risk, 0.3=below average, 0.5=neutral, 0.7=elevated, 0.9=high risk
+- overall_sentiment:    -0.9=strong sell, -0.5=bearish, 0=neutral, +0.5=bullish, +0.9=strong buy
+
+CRITICAL: Output structured signals on the LAST line in this exact format:
+SIGNALS: revenue_trend=<float> margin_trend=<float> peer_relative=<float> historical_momentum=<float> risk_level=<float> overall_sentiment=<float>"""
 
 
 class SynthesizerAgent:

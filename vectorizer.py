@@ -228,6 +228,37 @@ class NarrativeVectorizer:
         state_map = {'bullish': 0, 'neutral': 1, 'bearish': 2}
         return state_map[max_sentiment]
     
+    def get_narrative_scores(self, text: str = None, embedding: np.ndarray = None) -> np.ndarray:
+        """
+        Return soft [bullish, neutral, bearish] probability scores.
+
+        Unlike get_narrative_state() which discards conviction by returning an integer,
+        this preserves the full distribution so the DQN can learn from how *strongly*
+        bullish/bearish the text is.
+
+        Returns: float32 array [p_bullish, p_neutral, p_bearish] summing to 1.0
+        """
+        if self.sentiment_anchors is None:
+            return np.array([0.0, 1.0, 0.0], dtype=np.float32)
+
+        if embedding is None:
+            if text is None:
+                return np.array([0.0, 1.0, 0.0], dtype=np.float32)
+            embedding = self.get_embedding(text)
+
+        emb = np.array(embedding, dtype=np.float64).reshape(1, -1)
+        sims = np.array([
+            cosine_similarity(emb, self.sentiment_anchors['bullish'].reshape(1, -1))[0][0],
+            cosine_similarity(emb, self.sentiment_anchors['neutral'].reshape(1, -1))[0][0],
+            cosine_similarity(emb, self.sentiment_anchors['bearish'].reshape(1, -1))[0][0],
+        ], dtype=np.float32)
+
+        # Softmax with temperature=15 to sharpen: raw cosine sims cluster in 0.85-0.97
+        # making the distribution nearly uniform without sharpening.
+        sims = sims - sims.max()
+        exp_sims = np.exp(sims * 15.0)
+        return (exp_sims / exp_sims.sum()).astype(np.float32)
+
     def get_narrative_vector(self, text: str) -> np.ndarray:
         """
         Transform text into a continuous embedding vector.

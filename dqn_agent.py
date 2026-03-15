@@ -94,11 +94,11 @@ class DQNAgent:
 
     # State vector component sizes (must sum to STATE_DIM = 30)
     TECH_DIM = 7
-    NARRATIVE_CAT_DIM = 3
+    NARRATIVE_CAT_DIM = 3   # soft [p_bull, p_neutral, p_bear] scores
     FINANCIAL_CAT_DIM = 2
     POSITION_DIM = 1
     STRUCTURED_SIGNAL_DIM = 6
-    SIGNAL_DELTA_DIM = 6
+    SIGNAL_DELTA_DIM = 6    # actual financial metric deltas (EPS QoQ, surprise, etc.)
     CONTEXT_META_DIM = 5
 
     def __init__(
@@ -163,12 +163,15 @@ class DQNAgent:
     def get_state_vector(
         self,
         stock_features: dict,
-        narrative_state: int,
-        financial_state: int,
+        narrative_state: int = 1,
+        financial_state: int = 0,
         position_ratio: float = 0.0,
         structured_signals: np.ndarray = None,
         structured_signal_deltas: np.ndarray = None,
         context_meta: np.ndarray = None,
+        # Soft narrative scores: [p_bullish, p_neutral, p_bearish].
+        # When provided, used directly instead of converting narrative_state to one-hot.
+        narrative_scores: np.ndarray = None,
         # Legacy parameter accepted but ignored
         narrative_vector: np.ndarray = None,
     ) -> np.ndarray:
@@ -177,13 +180,18 @@ class DQNAgent:
 
         Parameters
         ----------
-        stock_features : dict  Technical indicators from MarkovRLAgent.
-        narrative_state : int  0=Bullish, 1=Neutral, 2=Bearish.
-        financial_state : int  0=Good, 1=Weak.
-        position_ratio  : float  Fraction of portfolio currently in the stock.
-        structured_signals     : ndarray(6)  LLM-derived signals (may be decayed).
-        structured_signal_deltas: ndarray(6) Quarter-over-quarter delta.
-        context_meta           : ndarray(5)  Reliability/staleness meta-features.
+        stock_features         : dict      Technical indicators from MarkovRLAgent.
+        narrative_state        : int       Fallback 0=Bullish, 1=Neutral, 2=Bearish.
+        financial_state        : int       0=Good, 1=Weak.
+        position_ratio         : float     Fraction of portfolio currently in the stock.
+        structured_signals     : ndarray(6) LLM-derived signals (staleness-decayed).
+        structured_signal_deltas: ndarray(6) Actual financial metric deltas (EPS QoQ,
+                                             surprise %, beat rate, accel, fwd growth,
+                                             trend slope).
+        context_meta           : ndarray(5) Reliability/staleness meta-features.
+        narrative_scores       : ndarray(3) Soft [p_bull, p_neutral, p_bear] from cosine
+                                            similarity to sentiment anchors. Preferred over
+                                            narrative_state; preserves conviction strength.
         narrative_vector       : ignored (kept for backward compatibility).
         """
         state_parts = []
@@ -200,10 +208,14 @@ class DQNAgent:
         ], dtype=np.float32)
         state_parts.append(tech)
 
-        # ---- Narrative one-hot (3) ----
-        narrative_onehot = np.zeros(self.NARRATIVE_CAT_DIM, dtype=np.float32)
-        narrative_onehot[int(np.clip(narrative_state, 0, 2))] = 1.0
-        state_parts.append(narrative_onehot)
+        # ---- Narrative scores (3): soft [p_bull, p_neutral, p_bear] ----
+        # Prefer soft scores (preserve conviction); fall back to one-hot if not provided.
+        if narrative_scores is not None and len(narrative_scores) >= self.NARRATIVE_CAT_DIM:
+            narrative_feat = np.clip(narrative_scores[:self.NARRATIVE_CAT_DIM], 0.0, 1.0).astype(np.float32)
+        else:
+            narrative_feat = np.zeros(self.NARRATIVE_CAT_DIM, dtype=np.float32)
+            narrative_feat[int(np.clip(narrative_state, 0, 2))] = 1.0
+        state_parts.append(narrative_feat)
 
         # ---- Financial one-hot (2) ----
         financial_onehot = np.zeros(self.FINANCIAL_CAT_DIM, dtype=np.float32)
@@ -364,6 +376,7 @@ class DQNAgent:
         context_meta: np.ndarray = None,
         position_state: str = "FLAT",
         explore: bool = False,
+        narrative_scores: np.ndarray = None,
         # Legacy parameter accepted but ignored
         narrative_vector: np.ndarray = None,
     ) -> dict:
@@ -372,6 +385,9 @@ class DQNAgent:
 
         Parameters
         ----------
+        narrative_scores : ndarray(3) Soft [p_bull, p_neutral, p_bear] scores from vectorizer.
+                           When provided, passed directly to get_state_vector instead of
+                           converting narrative_state to one-hot.
         narrative_vector : ignored (kept for backward compatibility).
         explore          : if True, use epsilon-greedy exploration.
         """
@@ -392,6 +408,7 @@ class DQNAgent:
             structured_signals=structured_signals,
             structured_signal_deltas=structured_signal_deltas,
             context_meta=context_meta,
+            narrative_scores=narrative_scores,
         )
 
         action_idx, q_values = self.get_action(state, explore=explore,

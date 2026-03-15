@@ -443,7 +443,8 @@ class Backtester:
         as_of_date: datetime
     ) -> np.ndarray:
         """
-        Compute temporal LLM feature deltas (current quarter structured signals minus previous available quarter).
+        Compute temporal LLM feature deltas (current quarter structured signals minus previous quarter).
+        Kept for the Q-learning (Markov) path; DQN uses _compute_financial_deltas instead.
         """
         if len(available_quarters) < 2:
             return np.zeros(6, dtype=np.float32)
@@ -457,8 +458,90 @@ class Backtester:
             prev_signals = np.zeros(6, dtype=np.float32)
 
         deltas = np.array(current_signals[:6], dtype=np.float32) - np.array(prev_signals[:6], dtype=np.float32)
-        # Keep outlier safety without destroying signal directionality.
         return np.clip(deltas, -2.0, 2.0).astype(np.float32)
+
+    def _compute_financial_deltas(self, financial_data_pti: Dict) -> np.ndarray:
+        """
+        Compute 6 hard financial metric deltas from actual quarterly earnings data.
+
+        Replaces noisy LLM signal deltas with real numbers the DQN can learn from.
+        Uses surprise list (most-recent-first) from _filter_financial_data_for_date.
+
+        Dimensions (all clipped to [-1, 1]):
+          0  eps_qoq       - EPS quarter-over-quarter change, normalised by |prev_eps|
+          1  eps_surprise  - latest earnings surprise %, normalised (÷10)
+          2  beat_rate     - fraction of last 4Q beaten, mapped to [-1, 1]
+          3  eps_accel     - acceleration of EPS growth (2nd derivative, normalised)
+          4  fwd_growth    - (latest_estimate / latest_reported - 1) capped at ±0.5→±1
+          5  eps_slope_3q  - 3Q linear trend slope, normalised by mean |EPS|
+        """
+        surprises = (financial_data_pti or {}).get("surprise", []) or []
+        if not surprises:
+            return np.zeros(6, dtype=np.float32)
+
+        eps_reported, eps_estimated, surprise_pcts = [], [], []
+        for row in surprises[:6]:
+            try:
+                rep = float(row.get("reportedEPS") or 0)
+                est = float(row.get("estimatedEPS") or rep)
+                # Alpha Vantage field name varies
+                surp = float(
+                    row.get("surprisePercentage")
+                    or row.get("surprisePercent")
+                    or row.get("surprise_pct")
+                    or 0
+                )
+            except (ValueError, TypeError):
+                continue
+            eps_reported.append(rep)
+            eps_estimated.append(est)
+            surprise_pcts.append(surp)
+
+        if not eps_reported:
+            return np.zeros(6, dtype=np.float32)
+
+        # dim 0: EPS QoQ change (normalised by |prev|)
+        eps_qoq = 0.0
+        if len(eps_reported) >= 2 and abs(eps_reported[1]) > 1e-6:
+            eps_qoq = float(np.clip(
+                (eps_reported[0] - eps_reported[1]) / abs(eps_reported[1]), -2.0, 2.0
+            )) / 2.0
+
+        # dim 1: Latest surprise % (÷10 so ±10% maps to ±1)
+        eps_surprise = float(np.clip(surprise_pcts[0] / 10.0, -1.0, 1.0)) if surprise_pcts else 0.0
+
+        # dim 2: Beat rate over last 4Q → mapped from [0,1] to [-1,1]
+        beats = [1.0 if s > 0 else (-1.0 if s < 0 else 0.0) for s in surprise_pcts[:4]]
+        beat_rate = float(np.mean(beats)) if beats else 0.0
+
+        # dim 3: EPS acceleration (change in the QoQ change rate)
+        eps_accel = 0.0
+        if len(eps_reported) >= 3:
+            q1_chg = eps_reported[0] - eps_reported[1]
+            q2_chg = eps_reported[1] - eps_reported[2]
+            denom = max(abs(eps_reported[1]), abs(eps_reported[2]), 1e-6)
+            eps_accel = float(np.clip((q1_chg - q2_chg) / denom, -2.0, 2.0)) / 2.0
+
+        # dim 4: Forward estimate vs latest reported (analyst view)
+        fwd_growth = 0.0
+        if eps_estimated and abs(eps_reported[0]) > 1e-6:
+            fwd_growth = float(np.clip(
+                (eps_estimated[0] / eps_reported[0] - 1.0) * 2.0, -1.0, 1.0
+            ))
+
+        # dim 5: 3Q linear slope (oldest→newest), normalised by mean |EPS|
+        eps_slope = 0.0
+        if len(eps_reported) >= 3:
+            y = np.array(eps_reported[:3][::-1], dtype=np.float64)  # oldest first
+            x = np.array([0.0, 1.0, 2.0])
+            mean_abs = max(np.mean(np.abs(y)), 1e-6)
+            slope = np.polyfit(x, y, 1)[0]
+            eps_slope = float(np.clip(slope / mean_abs, -1.0, 1.0))
+
+        return np.array(
+            [eps_qoq, eps_surprise, beat_rate, eps_accel, fwd_growth, eps_slope],
+            dtype=np.float32
+        )
     
     def generate_signal_for_date(
         self,
@@ -502,6 +585,7 @@ class Backtester:
                 structured_signal_deltas = np.zeros(6, dtype=np.float32)
                 context_meta = np.zeros(5, dtype=np.float32)
                 narrative_state = 1
+                narrative_scores = np.array([0.0, 1.0, 0.0], dtype=np.float32)  # fully neutral
                 financial_state = 0
                 llm_analysis_text = "Price-only DQN mode (LLM/context disabled)."
 
@@ -517,6 +601,7 @@ class Backtester:
                     signal_kwargs["financial_state"] = financial_state
                     signal_kwargs["context_meta"] = context_meta
                     signal_kwargs["structured_signal_deltas"] = structured_signal_deltas
+                    signal_kwargs["narrative_scores"] = narrative_scores
                     signal_kwargs['explore'] = self.enable_learning
                     signal_kwargs['position_state'] = position_state
 
@@ -685,12 +770,6 @@ class Backtester:
                     "agent_confidences": {}
                 }
 
-            structured_signal_deltas = self._compute_signal_deltas(
-                available_quarters=available_quarters,
-                recent_quarter=recent_quarter,
-                current_signals=structured_signals,
-                as_of_date=date
-            )
             context_meta = self._build_context_meta(
                 current_date=date,
                 quarter_id=recent_quarter,
@@ -698,26 +777,40 @@ class Backtester:
                 is_new_quarter=is_new_quarter
             )
 
-            # Staleness decay: fade LLM signals toward zero as earnings age.
-            # Exponential decay with half-life of ~42 days (tau=60).
-            # At day 0 (fresh earnings): decay=1.0.  At day 90: decay≈0.22.
+            # Staleness decay applied ONLY to LLM subjective signals (not to hard financial data).
+            # 90-day half-life: retains 37% at quarter-end vs 22% with old 60-day tau.
             report_date = self._quarter_reporting_date(recent_quarter)
             days_since_report = max(0.0, (date - report_date).days)
-            staleness_decay = float(np.exp(-days_since_report / 60.0))
+            staleness_decay = float(np.exp(-days_since_report / 90.0))
             structured_signals = structured_signals * staleness_decay
-            structured_signal_deltas = structured_signal_deltas * staleness_decay
 
-            # Get narrative state (uses keyword analysis on text)
-            narrative_state = self.vectorizer.get_narrative_state(text=llm_analysis_text)
-            
+            # Financial metric deltas from actual earnings data (no decay — these are facts).
+            # Replaces noisy LLM-signal QoQ deltas with: EPS QoQ, surprise %, beat rate,
+            # EPS acceleration, forward growth estimate, 3Q EPS slope.
+            from dqn_agent import DQNAgent
+            if isinstance(self.rl_agent, DQNAgent):
+                structured_signal_deltas = self._compute_financial_deltas(financial_data_pti)
+            else:
+                # Markov/Q-table path: keep LLM signal deltas
+                structured_signal_deltas = self._compute_signal_deltas(
+                    available_quarters=available_quarters,
+                    recent_quarter=recent_quarter,
+                    current_signals=structured_signals,
+                    as_of_date=date
+                )
+
+            # Soft narrative scores [p_bull, p_neutral, p_bear] — preserves conviction.
+            narrative_scores = self.vectorizer.get_narrative_scores(text=llm_analysis_text)
+            narrative_state = int(np.argmax(narrative_scores))  # kept for logging/recording
+
             # Debug: Print sentiment analysis occasionally
             if np.random.random() < 0.1:  # 10% of trades
                 print(
-                    f"   🔍 DEBUG | Quarter: {recent_quarter} | State: {narrative_state} "
-                    f"(0=Bull, 1=Neut, 2=Bear) | Decay: {staleness_decay:.2f} "
-                    f"| Signals: {structured_signals} | ΔSignals: {structured_signal_deltas}"
+                    f"   🔍 DEBUG | Quarter: {recent_quarter} | Narrative: {narrative_scores.round(2)} "
+                    f"| Decay: {staleness_decay:.2f} "
+                    f"| Signals: {structured_signals.round(3)} | FinΔ: {structured_signal_deltas.round(3)}"
                 )
-            
+
             # Generate RL signal
             signal_kwargs = dict(
                 price_history=price_history,
@@ -726,12 +819,12 @@ class Backtester:
                 position_ratio=position_ratio,
                 structured_signals=structured_signals,
             )
-            
-            # For DQN, also pass explore flag
-            from dqn_agent import DQNAgent
+
+            # For DQN, also pass explore flag and extra features
             if isinstance(self.rl_agent, DQNAgent):
                 signal_kwargs["context_meta"] = context_meta
                 signal_kwargs["structured_signal_deltas"] = structured_signal_deltas
+                signal_kwargs["narrative_scores"] = narrative_scores
                 signal_kwargs['explore'] = self.enable_learning
                 signal_kwargs['position_state'] = position_state
             

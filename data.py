@@ -33,18 +33,18 @@ def make_request(params: Dict) -> Optional[Dict]:
             
             # Check for API error messages
             if "Error Message" in data:
-                print(f"❌ API Error: {data['Error Message']}")
+                print(f"API error: {data['Error Message']}")
                 return None
             if "Note" in data and "API call frequency" in data["Note"]:
-                print(f"⚠️  Rate limit warning: {data['Note']}")
+                print(f"Rate limit: {data['Note']}")
                 return None
                 
             return data
     except httpx.HTTPError as e:
-        print(f"❌ HTTP Error: {e}")
+        print(f"HTTP error: {e}")
         return None
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"Error: {e}")
         return None
 
 
@@ -52,7 +52,7 @@ def make_request(params: Dict) -> Optional[Dict]:
 
 def fetch_daily_stock_data(ticker: str):
     """Fetch daily stock data for ticker (5 years of history)"""
-    print(f"\n📊 Fetching daily stock data for {ticker}...")
+    print(f"\nFetching daily stock data for {ticker}...")
     
     params = {
         "function": "TIME_SERIES_DAILY_ADJUSTED",
@@ -62,7 +62,7 @@ def fetch_daily_stock_data(ticker: str):
     
     data = make_request(params)
     if not data or "Time Series (Daily)" not in data:
-        print("❌ Failed to fetch daily stock data")
+        print("Error: Failed to fetch daily stock data")
         return
     
     # Convert to DataFrame
@@ -88,14 +88,14 @@ def fetch_daily_stock_data(ticker: str):
     # Save to CSV
     output_file = f"{OUTPUT_DIR}/{ticker}_daily_stock_data_5y.csv"
     df.to_csv(output_file)
-    print(f"✅ Saved daily stock data: {output_file} ({len(df)} trading days)")
+    print(f"Saved daily stock data: {output_file} ({len(df)} trading days)")
     
     rate_limit_sleep()
 
 
 def fetch_weekly_stock_data(ticker: str):
     """Fetch weekly adjusted stock data"""
-    print(f"\n📊 Fetching weekly stock data for {ticker}...")
+    print(f"\nFetching weekly stock data for {ticker}...")
     
     params = {
         "function": "TIME_SERIES_WEEKLY_ADJUSTED",
@@ -104,7 +104,7 @@ def fetch_weekly_stock_data(ticker: str):
     
     data = make_request(params)
     if not data or "Weekly Adjusted Time Series" not in data:
-        print("❌ Failed to fetch weekly stock data")
+        print("Error: Failed to fetch weekly stock data")
         return
     
     # Convert to DataFrame
@@ -125,14 +125,14 @@ def fetch_weekly_stock_data(ticker: str):
     # Save to CSV
     output_file = f"{OUTPUT_DIR}/{ticker}_weekly_stock_data.csv"
     df.to_csv(output_file)
-    print(f"✅ Saved weekly stock data: {output_file} ({len(df)} weeks)")
+    print(f"Saved weekly stock data: {output_file} ({len(df)} weeks)")
     
     rate_limit_sleep()
 
 
 def fetch_monthly_stock_data(ticker: str):
     """Fetch monthly adjusted stock data"""
-    print(f"\n📊 Fetching monthly stock data for {ticker}...")
+    print(f"\nFetching monthly stock data for {ticker}...")
     
     params = {
         "function": "TIME_SERIES_MONTHLY_ADJUSTED",
@@ -141,7 +141,7 @@ def fetch_monthly_stock_data(ticker: str):
     
     data = make_request(params)
     if not data or "Monthly Adjusted Time Series" not in data:
-        print("❌ Failed to fetch monthly stock data")
+        print("Error: Failed to fetch monthly stock data")
         return
     
     # Convert to DataFrame
@@ -162,14 +162,14 @@ def fetch_monthly_stock_data(ticker: str):
     # Save to CSV
     output_file = f"{OUTPUT_DIR}/{ticker}_monthly_stock_data.csv"
     df.to_csv(output_file)
-    print(f"✅ Saved monthly stock data: {output_file} ({len(df)} months)")
+    print(f"Saved monthly stock data: {output_file} ({len(df)} months)")
     
     rate_limit_sleep()
 
 
 def fetch_quote_endpoint(ticker: str):
     """Fetch latest quote snapshot"""
-    print(f"\n💱 Fetching latest quote for {ticker}...")
+    print(f"\nFetching latest quote for {ticker}...")
     
     params = {
         "function": "GLOBAL_QUOTE",
@@ -178,7 +178,7 @@ def fetch_quote_endpoint(ticker: str):
     
     data = make_request(params)
     if not data or "Global Quote" not in data:
-        print("❌ Failed to fetch quote")
+        print("Error: Failed to fetch quote")
         return
     
     # Convert to DataFrame
@@ -187,7 +187,7 @@ def fetch_quote_endpoint(ticker: str):
     # Save to CSV
     output_file = f"{OUTPUT_DIR}/{ticker}_latest_quote.csv"
     df.to_csv(output_file, index=False)
-    print(f"✅ Saved latest quote: {output_file}")
+    print(f"Saved latest quote: {output_file}")
     
     rate_limit_sleep()
 
@@ -196,7 +196,7 @@ def fetch_quote_endpoint(ticker: str):
 
 def fetch_company_overview(ticker: str):
     """Fetch company overview and fundamentals"""
-    print(f"\n🏢 Fetching company overview for {ticker}...")
+    print(f"\nFetching company overview for {ticker}...")
     
     params = {
         "function": "OVERVIEW",
@@ -205,7 +205,7 @@ def fetch_company_overview(ticker: str):
     
     data = make_request(params)
     if not data:
-        print("❌ Failed to fetch company overview")
+        print("Error: Failed to fetch company overview")
         return
     
     # Convert to DataFrame
@@ -214,14 +214,14 @@ def fetch_company_overview(ticker: str):
     # Save to CSV
     output_file = f"{OUTPUT_DIR}/{ticker}_company_overview.csv"
     df.to_csv(output_file, index=False)
-    print(f"✅ Saved company overview: {output_file}")
+    print(f"Saved company overview: {output_file}")
     
     rate_limit_sleep()
 
 
 def fetch_income_statement(ticker: str):
     """Fetch income statements"""
-    print(f"\n💰 Fetching income statements for {ticker}...")
+    print(f"\nFetching income statements for {ticker}...")
     
     params = {
         "function": "INCOME_STATEMENT",
@@ -230,7 +230,7 @@ def fetch_income_statement(ticker: str):
     
     data = make_request(params)
     if not data:
-        print("❌ Failed to fetch income statements")
+        print("Error: Failed to fetch income statements")
         return
     
     # Annual reports
@@ -238,21 +238,21 @@ def fetch_income_statement(ticker: str):
         df_annual = pd.DataFrame(data["annualReports"])
         output_file = f"{OUTPUT_DIR}/{ticker}_income_statement_annual.csv"
         df_annual.to_csv(output_file, index=False)
-        print(f"✅ Saved annual income statements: {output_file} ({len(df_annual)} years)")
+        print(f"Saved annual income statements: {output_file} ({len(df_annual)} years)")
     
     # Quarterly reports
     if "quarterlyReports" in data:
         df_quarterly = pd.DataFrame(data["quarterlyReports"])
         output_file = f"{OUTPUT_DIR}/{ticker}_income_statement_quarterly.csv"
         df_quarterly.to_csv(output_file, index=False)
-        print(f"✅ Saved quarterly income statements: {output_file} ({len(df_quarterly)} quarters)")
+        print(f"Saved quarterly income statements: {output_file} ({len(df_quarterly)} quarters)")
     
     rate_limit_sleep()
 
 
 def fetch_balance_sheet(ticker: str):
     """Fetch balance sheets"""
-    print(f"\n📋 Fetching balance sheets for {ticker}...")
+    print(f"\nFetching balance sheets for {ticker}...")
     
     params = {
         "function": "BALANCE_SHEET",
@@ -261,7 +261,7 @@ def fetch_balance_sheet(ticker: str):
     
     data = make_request(params)
     if not data:
-        print("❌ Failed to fetch balance sheets")
+        print("Error: Failed to fetch balance sheets")
         return
     
     # Annual reports
@@ -269,21 +269,21 @@ def fetch_balance_sheet(ticker: str):
         df_annual = pd.DataFrame(data["annualReports"])
         output_file = f"{OUTPUT_DIR}/{ticker}_balance_sheet_annual.csv"
         df_annual.to_csv(output_file, index=False)
-        print(f"✅ Saved annual balance sheets: {output_file} ({len(df_annual)} years)")
+        print(f"Saved annual balance sheets: {output_file} ({len(df_annual)} years)")
     
     # Quarterly reports
     if "quarterlyReports" in data:
         df_quarterly = pd.DataFrame(data["quarterlyReports"])
         output_file = f"{OUTPUT_DIR}/{ticker}_balance_sheet_quarterly.csv"
         df_quarterly.to_csv(output_file, index=False)
-        print(f"✅ Saved quarterly balance sheets: {output_file} ({len(df_quarterly)} quarters)")
+        print(f"Saved quarterly balance sheets: {output_file} ({len(df_quarterly)} quarters)")
     
     rate_limit_sleep()
 
 
 def fetch_cash_flow(ticker: str):
     """Fetch cash flow statements"""
-    print(f"\n💸 Fetching cash flow statements for {ticker}...")
+    print(f"\nFetching cash flow statements for {ticker}...")
     
     params = {
         "function": "CASH_FLOW",
@@ -292,7 +292,7 @@ def fetch_cash_flow(ticker: str):
     
     data = make_request(params)
     if not data:
-        print("❌ Failed to fetch cash flow statements")
+        print("Error: Failed to fetch cash flow statements")
         return
     
     # Annual reports
@@ -300,21 +300,21 @@ def fetch_cash_flow(ticker: str):
         df_annual = pd.DataFrame(data["annualReports"])
         output_file = f"{OUTPUT_DIR}/{ticker}_cash_flow_annual.csv"
         df_annual.to_csv(output_file, index=False)
-        print(f"✅ Saved annual cash flow statements: {output_file} ({len(df_annual)} years)")
+        print(f"Saved annual cash flow statements: {output_file} ({len(df_annual)} years)")
     
     # Quarterly reports
     if "quarterlyReports" in data:
         df_quarterly = pd.DataFrame(data["quarterlyReports"])
         output_file = f"{OUTPUT_DIR}/{ticker}_cash_flow_quarterly.csv"
         df_quarterly.to_csv(output_file, index=False)
-        print(f"✅ Saved quarterly cash flow statements: {output_file} ({len(df_quarterly)} quarters)")
+        print(f"Saved quarterly cash flow statements: {output_file} ({len(df_quarterly)} quarters)")
     
     rate_limit_sleep()
 
 
 def fetch_earnings(ticker: str):
     """Fetch earnings history"""
-    print(f"\n📊 Fetching earnings history for {ticker}...")
+    print(f"\nFetching earnings history for {ticker}...")
     
     params = {
         "function": "EARNINGS",
@@ -323,7 +323,7 @@ def fetch_earnings(ticker: str):
     
     data = make_request(params)
     if not data:
-        print("❌ Failed to fetch earnings")
+        print("Error: Failed to fetch earnings")
         return
     
     # Annual earnings
@@ -331,21 +331,21 @@ def fetch_earnings(ticker: str):
         df_annual = pd.DataFrame(data["annualEarnings"])
         output_file = f"{OUTPUT_DIR}/{ticker}_earnings_annual.csv"
         df_annual.to_csv(output_file, index=False)
-        print(f"✅ Saved annual earnings: {output_file} ({len(df_annual)} years)")
+        print(f"Saved annual earnings: {output_file} ({len(df_annual)} years)")
     
     # Quarterly earnings
     if "quarterlyEarnings" in data:
         df_quarterly = pd.DataFrame(data["quarterlyEarnings"])
         output_file = f"{OUTPUT_DIR}/{ticker}_earnings_quarterly.csv"
         df_quarterly.to_csv(output_file, index=False)
-        print(f"✅ Saved quarterly earnings: {output_file} ({len(df_quarterly)} quarters)")
+        print(f"Saved quarterly earnings: {output_file} ({len(df_quarterly)} quarters)")
     
     rate_limit_sleep()
 
 
 def fetch_earnings_estimates(ticker: str):
     """Fetch forward earnings estimates"""
-    print(f"\n🔮 Fetching earnings estimates for {ticker}...")
+    print(f"\nFetching earnings estimates for {ticker}...")
     
     params = {
         "function": "EARNINGS_ESTIMATES",
@@ -354,7 +354,7 @@ def fetch_earnings_estimates(ticker: str):
     
     data = make_request(params)
     if not data or "estimates" not in data:
-        print("❌ Failed to fetch earnings estimates")
+        print("Error: Failed to fetch earnings estimates")
         return
     
     # Convert to DataFrame
@@ -363,14 +363,14 @@ def fetch_earnings_estimates(ticker: str):
     # Save to CSV
     output_file = f"{OUTPUT_DIR}/{ticker}_earnings_estimates.csv"
     df.to_csv(output_file, index=False)
-    print(f"✅ Saved earnings estimates: {output_file} ({len(df)} estimates)")
+    print(f"Saved earnings estimates: {output_file} ({len(df)} estimates)")
     
     rate_limit_sleep()
 
 
 def fetch_shares_outstanding(ticker: str):
     """Fetch shares outstanding data"""
-    print(f"\n📊 Fetching shares outstanding for {ticker}...")
+    print(f"\nFetching shares outstanding for {ticker}...")
     
     params = {
         "function": "SHARES_OUTSTANDING",
@@ -379,7 +379,7 @@ def fetch_shares_outstanding(ticker: str):
     
     data = make_request(params)
     if not data or "data" not in data:
-        print("❌ Failed to fetch shares outstanding")
+        print("Error: Failed to fetch shares outstanding")
         return
     
     # Convert to DataFrame
@@ -388,14 +388,14 @@ def fetch_shares_outstanding(ticker: str):
     # Save to CSV
     output_file = f"{OUTPUT_DIR}/{ticker}_shares_outstanding.csv"
     df.to_csv(output_file, index=False)
-    print(f"✅ Saved shares outstanding: {output_file} ({len(df)} data points)")
+    print(f"Saved shares outstanding: {output_file} ({len(df)} data points)")
     
     rate_limit_sleep()
 
 
 def fetch_dividends(ticker: str):
     """Fetch dividend history"""
-    print(f"\n💰 Fetching dividend history for {ticker}...")
+    print(f"\nFetching dividend history for {ticker}...")
     
     params = {
         "function": "DIVIDENDS",
@@ -404,7 +404,7 @@ def fetch_dividends(ticker: str):
     
     data = make_request(params)
     if not data or "data" not in data:
-        print(f"❌ Failed to fetch dividends (Note: {ticker} may not have dividends)")
+        print(f"Error: Failed to fetch dividends (Note: {ticker} may not have dividends)")
         return
     
     # Convert to DataFrame
@@ -414,16 +414,16 @@ def fetch_dividends(ticker: str):
         # Save to CSV
         output_file = f"{OUTPUT_DIR}/{ticker}_dividends.csv"
         df.to_csv(output_file, index=False)
-        print(f"✅ Saved dividends: {output_file} ({len(df)} dividend payments)")
+        print(f"Saved dividends: {output_file} ({len(df)} dividend payments)")
     else:
-        print("  ℹ️  No dividend data available")
+        print("  Note: No dividend data available")
     
     rate_limit_sleep()
 
 
 def fetch_splits(ticker: str):
     """Fetch stock split history"""
-    print(f"\n🔀 Fetching stock split history for {ticker}...")
+    print(f"\nFetching stock split history for {ticker}...")
     
     params = {
         "function": "SPLITS",
@@ -432,7 +432,7 @@ def fetch_splits(ticker: str):
     
     data = make_request(params)
     if not data or "data" not in data:
-        print("❌ Failed to fetch stock splits")
+        print("Error: Failed to fetch stock splits")
         return
     
     # Convert to DataFrame
@@ -442,9 +442,9 @@ def fetch_splits(ticker: str):
         # Save to CSV
         output_file = f"{OUTPUT_DIR}/{ticker}_stock_splits.csv"
         df.to_csv(output_file, index=False)
-        print(f"✅ Saved stock splits: {output_file} ({len(df)} splits)")
+        print(f"Saved stock splits: {output_file} ({len(df)} splits)")
     else:
-        print("  ℹ️  No stock split data available")
+        print("  Note: No stock split data available")
     
     rate_limit_sleep()
 
@@ -453,7 +453,7 @@ def fetch_splits(ticker: str):
 
 def fetch_earnings_calendar(ticker: str):
     """Fetch earnings calendar"""
-    print(f"\n📅 Fetching earnings calendar for {ticker}...")
+    print(f"\nFetching earnings calendar for {ticker}...")
     
     params = {
         "function": "EARNINGS_CALENDAR",
@@ -473,16 +473,16 @@ def fetch_earnings_calendar(ticker: str):
             output_file = f"{OUTPUT_DIR}/{ticker}_earnings_calendar.csv"
             with open(output_file, 'w') as f:
                 f.write(response.text)
-            print(f"✅ Saved earnings calendar: {output_file}")
+            print(f"Saved earnings calendar: {output_file}")
     except Exception as e:
-        print(f"❌ Failed to fetch earnings calendar: {e}")
+        print(f"Error: Failed to fetch earnings calendar: {e}")
     
     rate_limit_sleep()
 
 
 def fetch_earnings_call_transcript(ticker: str, year: str = "2024", quarter: str = "Q3"):
     """Fetch earnings call transcript for a specific quarter"""
-    print(f"\n📝 Fetching earnings call transcript for {ticker} {quarter} {year}...")
+    print(f"\nFetching earnings call transcript for {ticker} {quarter} {year}...")
     
     # Alpha Vantage format: quarter=2024Q1 (year+quarter combined)
     quarter_param = f"{year}{quarter}"
@@ -495,19 +495,19 @@ def fetch_earnings_call_transcript(ticker: str, year: str = "2024", quarter: str
     
     data = make_request(params)
     if not data:
-        print(f"  ⚠️  No transcript available for {quarter} {year}")
+        print(f"  Warning: No transcript available for {quarter} {year}")
         return False
     
     # Check if there's actual transcript data
     if isinstance(data, dict):
         # Check for various "no data" indicators
         if "Information" in data or "Note" in data or "Error Message" in data:
-            print(f"  ⚠️  No transcript data for {quarter} {year}")
+            print(f"  Warning: No transcript data for {quarter} {year}")
             return False
         
         # Check if response is empty or has no content
         if len(data) == 0 or (len(data) == 1 and list(data.keys())[0] in ["Information", "Note"]):
-            print(f"  ⚠️  No transcript data for {quarter} {year}")
+            print(f"  Warning: No transcript data for {quarter} {year}")
             return False
     
     # Save transcript - handle different response formats
@@ -544,23 +544,23 @@ def fetch_earnings_call_transcript(ticker: str, year: str = "2024", quarter: str
             
             # Get size in KB for display
             size_kb = len(transcript_text) / 1024
-            print(f"  ✅ Saved transcript ({size_kb:.1f} KB): {os.path.basename(output_file)}")
+            print(f"  Saved transcript ({size_kb:.1f} KB): {os.path.basename(output_file)}")
             rate_limit_sleep()
             return True
         else:
-            print(f"  ⚠️  No transcript content for {quarter} {year}")
+            print(f"  Warning: No transcript content for {quarter} {year}")
             rate_limit_sleep()
             return False
             
     except Exception as e:
-        print(f"  ❌ Error saving transcript: {e}")
+        print(f"  Error saving transcript: {e}")
         rate_limit_sleep()
         return False
 
 
 def fetch_all_recent_earnings_transcripts(ticker: str):
     """Fetch earnings call transcripts for recent quarters (5 years = 20 quarters)"""
-    print(f"\n📝 Fetching earnings call transcripts for {ticker} (last 5 years)...")
+    print(f"\nFetching earnings call transcripts for {ticker} (last 5 years)...")
     
     # Fetch transcripts for the last 20 quarters (5 years)
     # Start from the most recent completed quarter
@@ -590,16 +590,16 @@ def fetch_all_recent_earnings_transcripts(ticker: str):
             success_count += 1
     
     if success_count > 0:
-        print(f"\n  ✅ Successfully fetched {success_count} earnings call transcripts (out of 20 quarters)")
+        print(f"\n  Successfully fetched {success_count} earnings call transcripts (out of 20 quarters)")
     else:
-        print(f"\n  ⚠️  No transcripts available (may require specific Premium tier)")
+        print(f"\n  Warning: No transcripts available (may require specific Premium tier)")
 
 
 # 4. NEWS AND SENTIMENT (PREMIUM FEATURE)
 
 def fetch_news_sentiment(ticker: str):
     """Fetch news and sentiment data"""
-    print(f"\n📰 Fetching news & sentiment for {ticker}...")
+    print(f"\nFetching news & sentiment for {ticker}...")
     
     params = {
         "function": "NEWS_SENTIMENT",
@@ -609,7 +609,7 @@ def fetch_news_sentiment(ticker: str):
     
     data = make_request(params)
     if not data or "feed" not in data:
-        print("❌ Failed to fetch news sentiment")
+        print("Error: Failed to fetch news sentiment")
         return
     
     # Convert news feed to DataFrame
@@ -639,7 +639,7 @@ def fetch_news_sentiment(ticker: str):
     df = pd.DataFrame(news_items)
     output_file = f"{OUTPUT_DIR}/{ticker}_news_sentiment.csv"
     df.to_csv(output_file, index=False)
-    print(f"✅ Saved news & sentiment: {output_file} ({len(df)} articles)")
+    print(f"Saved news & sentiment: {output_file} ({len(df)} articles)")
     
     rate_limit_sleep()
 
@@ -648,7 +648,7 @@ def fetch_news_sentiment(ticker: str):
 
 def fetch_insider_transactions(ticker: str):
     """Fetch insider transaction data"""
-    print(f"\n👔 Fetching insider transactions for {ticker}...")
+    print(f"\nFetching insider transactions for {ticker}...")
     
     # Note: Alpha Vantage uses INSIDER_TRANSACTIONS function (check if available in your plan)
     params = {
@@ -658,14 +658,14 @@ def fetch_insider_transactions(ticker: str):
     
     data = make_request(params)
     if not data or "data" not in data:
-        print("❌ Failed to fetch insider transactions (may require specific premium plan)")
+        print("Error: Failed to fetch insider transactions (may require specific premium plan)")
         return
     
     # Convert to DataFrame
     df = pd.DataFrame(data["data"])
     output_file = f"{OUTPUT_DIR}/{ticker}_insider_transactions.csv"
     df.to_csv(output_file, index=False)
-    print(f"✅ Saved insider transactions: {output_file} ({len(df)} transactions)")
+    print(f"Saved insider transactions: {output_file} ({len(df)} transactions)")
     
     rate_limit_sleep()
 
@@ -674,7 +674,7 @@ def fetch_insider_transactions(ticker: str):
 
 def fetch_technical_indicator(ticker: str, indicator: str, params: Dict, filename: str):
     """Generic function to fetch technical indicators"""
-    print(f"  📈 Fetching {indicator}...")
+    print(f"   Fetching {indicator}...")
     
     params.update({
         "symbol": ticker,
@@ -683,7 +683,7 @@ def fetch_technical_indicator(ticker: str, indicator: str, params: Dict, filenam
     
     data = make_request(params)
     if not data:
-        print(f"  ❌ Failed to fetch {indicator}")
+        print(f"  Error: Failed to fetch {indicator}")
         return
     
     # Find the technical analysis key (varies by indicator)
@@ -694,7 +694,7 @@ def fetch_technical_indicator(ticker: str, indicator: str, params: Dict, filenam
             break
     
     if not tech_key or tech_key not in data:
-        print(f"  ❌ No technical data found for {indicator}")
+        print(f"  Error: No technical data found for {indicator}")
         return
     
     # Convert to DataFrame
@@ -710,14 +710,14 @@ def fetch_technical_indicator(ticker: str, indicator: str, params: Dict, filenam
     # Save to CSV
     output_file = f"{OUTPUT_DIR}/{ticker}_{filename}.csv"
     df.to_csv(output_file)
-    print(f"  ✅ Saved {indicator}: {output_file} ({len(df)} days)")
+    print(f"  Saved {indicator}: {output_file} ({len(df)} days)")
     
     rate_limit_sleep()
 
 
 def fetch_all_technical_indicators(ticker: str):
     """Fetch various technical indicators"""
-    print(f"\n📊 Fetching technical indicators for {ticker}...")
+    print(f"\nFetching technical indicators for {ticker}...")
     
     indicators = [
         # Moving Averages
@@ -756,7 +756,7 @@ def fetch_all_technical_indicators(ticker: str):
 
 def fetch_economic_indicator(indicator_name: str, function: str, filename: str):
     """Generic function to fetch economic indicators"""
-    print(f"  📊 Fetching {indicator_name}...")
+    print(f"  Fetching {indicator_name}...")
     
     params = {
         "function": function,
@@ -764,7 +764,7 @@ def fetch_economic_indicator(indicator_name: str, function: str, filename: str):
     
     data = make_request(params)
     if not data or "data" not in data:
-        print(f"  ❌ Failed to fetch {indicator_name}")
+        print(f"  Error: Failed to fetch {indicator_name}")
         return
     
     # Convert to DataFrame
@@ -778,14 +778,14 @@ def fetch_economic_indicator(indicator_name: str, function: str, filename: str):
     # Save to CSV
     output_file = f"{OUTPUT_DIR}/economic_{filename}.csv"
     df.to_csv(output_file, index=False)
-    print(f"  ✅ Saved {indicator_name}: {output_file} ({len(df)} data points)")
+    print(f"  Saved {indicator_name}: {output_file} ({len(df)} data points)")
     
     rate_limit_sleep()
 
 
 def fetch_all_economic_indicators():
     """Fetch various economic indicators"""
-    print(f"\n🏛️  Fetching economic indicators (Fed data)...")
+    print(f"\nFetching economic indicators (Fed data)...")
     
     indicators = [
         # Interest Rates
@@ -817,7 +817,7 @@ def fetch_all_economic_indicators():
 
 def fetch_analytics_fixed_window(ticker: str):
     """Fetch analytics with fixed window"""
-    print(f"\n📊 Fetching analytics (fixed window) for {ticker}...")
+    print(f"\nFetching analytics (fixed window) for {ticker}...")
     
     params = {
         "function": "ANALYTICS_FIXED_WINDOW",
@@ -829,7 +829,7 @@ def fetch_analytics_fixed_window(ticker: str):
     
     data = make_request(params)
     if not data or "data" not in data:
-        print("❌ Failed to fetch analytics (may require specific premium plan)")
+        print("Error: Failed to fetch analytics (may require specific premium plan)")
         return
     
     # Convert to DataFrame
@@ -838,14 +838,14 @@ def fetch_analytics_fixed_window(ticker: str):
     # Save to CSV
     output_file = f"{OUTPUT_DIR}/{ticker}_analytics_fixed_window.csv"
     df.to_csv(output_file, index=False)
-    print(f"✅ Saved analytics (fixed window): {output_file}")
+    print(f"Saved analytics (fixed window): {output_file}")
     
     rate_limit_sleep()
 
 
 def fetch_analytics_sliding_window(ticker: str):
     """Fetch analytics with sliding window"""
-    print(f"\n📊 Fetching analytics (sliding window) for {ticker}...")
+    print(f"\nFetching analytics (sliding window) for {ticker}...")
     
     params = {
         "function": "ANALYTICS_SLIDING_WINDOW",
@@ -858,7 +858,7 @@ def fetch_analytics_sliding_window(ticker: str):
     
     data = make_request(params)
     if not data or "data" not in data:
-        print("❌ Failed to fetch sliding window analytics (may require specific premium plan)")
+        print("Error: Failed to fetch sliding window analytics (may require specific premium plan)")
         return
     
     # Convert to DataFrame
@@ -867,14 +867,14 @@ def fetch_analytics_sliding_window(ticker: str):
     # Save to CSV
     output_file = f"{OUTPUT_DIR}/{ticker}_analytics_sliding_window.csv"
     df.to_csv(output_file, index=False)
-    print(f"✅ Saved analytics (sliding window): {output_file}")
+    print(f"Saved analytics (sliding window): {output_file}")
     
     rate_limit_sleep()
 
 
 def fetch_top_gainers_losers():
     """Fetch top gainers and losers for market context"""
-    print(f"\n📈📉 Fetching top gainers & losers...")
+    print(f"\nFetching top gainers & losers...")
     
     params = {
         "function": "TOP_GAINERS_LOSERS",
@@ -882,7 +882,7 @@ def fetch_top_gainers_losers():
     
     data = make_request(params)
     if not data:
-        print("❌ Failed to fetch top gainers & losers")
+        print("Error: Failed to fetch top gainers & losers")
         return
     
     # Save each category
@@ -891,7 +891,7 @@ def fetch_top_gainers_losers():
             df = pd.DataFrame(data[category])
             output_file = f"{OUTPUT_DIR}/market_{category}.csv"
             df.to_csv(output_file, index=False)
-            print(f"  ✅ Saved {category}: {output_file}")
+            print(f"  Saved {category}: {output_file}")
     
     rate_limit_sleep()
 
@@ -900,7 +900,7 @@ def fetch_top_gainers_losers():
 
 def fetch_etf_holdings_that_own_stock(ticker: str):
     """Find which ETFs hold the stock (requires knowing major ETF symbols)"""
-    print(f"\n📦 Checking major ETF holdings of {ticker}...")
+    print(f"\nChecking major ETF holdings of {ticker}...")
     
     # Major ETFs that likely hold tech stocks (tech-focused and broad market)
     major_etfs = ["QQQ", "SPY", "VGT", "XLK", "SOXX", "SMH", "VTI", "IWF"]
@@ -926,7 +926,7 @@ def fetch_etf_holdings_that_own_stock(ticker: str):
                         "weight": holding.get("weight", ""),
                         "shares": holding.get("shares", ""),
                     })
-                    print(f"    ✅ Found {ticker} in {etf_symbol}")
+                    print(f"    Found {ticker} in {etf_symbol}")
                     break
         
         rate_limit_sleep(0.3)
@@ -935,9 +935,9 @@ def fetch_etf_holdings_that_own_stock(ticker: str):
         df = pd.DataFrame(all_holdings)
         output_file = f"{OUTPUT_DIR}/{ticker}_etf_holdings.csv"
         df.to_csv(output_file, index=False)
-        print(f"✅ Saved ETF holdings: {output_file} ({len(all_holdings)} ETFs)")
+        print(f"Saved ETF holdings: {output_file} ({len(all_holdings)} ETFs)")
     else:
-        print("  ℹ️  No ETF holdings data found")
+        print("  Note: No ETF holdings data found")
 
 
 # MAIN EXECUTION
@@ -945,7 +945,7 @@ def fetch_etf_holdings_that_own_stock(ticker: str):
 def main():
     """Main function to fetch all data"""
     print("=" * 80)
-    print("🚀 ALPHA VANTAGE PREMIUM DATA COLLECTION")
+    print("ALPHA VANTAGE PREMIUM DATA COLLECTION")
     print("=" * 80)
     print(f"Tickers: {', '.join(TICKERS)}")
     print(f"Output Directory: {OUTPUT_DIR}/")
@@ -953,7 +953,7 @@ def main():
     print("=" * 80)
     
     if not ALPHA_VANTAGE_API_KEY:
-        print("❌ ERROR: ALPHA_VANTAGE_API_KEY not found in .env file")
+        print("ERROR: ALPHA_VANTAGE_API_KEY not found in .env file")
         return
     
     try:
@@ -965,7 +965,7 @@ def main():
             
             # 1. Stock Price Data (Multiple Timeframes)
             print("\n" + "=" * 80)
-            print(f"1️⃣  STOCK PRICE DATA ({ticker})")
+            print(f"STOCK PRICE DATA ({ticker})")
             print("=" * 80)
             fetch_daily_stock_data(ticker)
             fetch_weekly_stock_data(ticker)
@@ -974,7 +974,7 @@ def main():
             
             # 2. Fundamental Data
             print("\n" + "=" * 80)
-            print(f"2️⃣  FUNDAMENTAL DATA ({ticker})")
+            print(f"FUNDAMENTAL DATA ({ticker})")
             print("=" * 80)
             fetch_company_overview(ticker)
             fetch_income_statement(ticker)
@@ -984,7 +984,7 @@ def main():
             
             # 3. Earnings Data
             print("\n" + "=" * 80)
-            print(f"3️⃣  EARNINGS DATA ({ticker})")
+            print(f"EARNINGS DATA ({ticker})")
             print("=" * 80)
             fetch_earnings(ticker)
             fetch_earnings_estimates(ticker)
@@ -992,45 +992,45 @@ def main():
             
             # 4. Earnings Call Transcripts (Premium)
             print("\n" + "=" * 80)
-            print(f"4️⃣  EARNINGS CALL TRANSCRIPTS (Premium) ({ticker})")
+            print(f"EARNINGS CALL TRANSCRIPTS (Premium) ({ticker})")
             print("=" * 80)
             fetch_all_recent_earnings_transcripts(ticker)
             
             # 5. Corporate Actions
             print("\n" + "=" * 80)
-            print(f"5️⃣  CORPORATE ACTIONS ({ticker})")
+            print(f"CORPORATE ACTIONS ({ticker})")
             print("=" * 80)
             fetch_dividends(ticker)
             fetch_splits(ticker)
             
             # 6. News & Sentiment (Premium)
             print("\n" + "=" * 80)
-            print(f"6️⃣  NEWS & SENTIMENT (Premium) ({ticker})")
+            print(f"NEWS & SENTIMENT (Premium) ({ticker})")
             print("=" * 80)
             fetch_news_sentiment(ticker)
             
             # 7. Insider Transactions (Premium)
             print("\n" + "=" * 80)
-            print(f"7️⃣  INSIDER TRANSACTIONS (Premium) ({ticker})")
+            print(f"INSIDER TRANSACTIONS (Premium) ({ticker})")
             print("=" * 80)
             fetch_insider_transactions(ticker)
             
             # 8. Technical Indicators
             print("\n" + "=" * 80)
-            print(f"8️⃣  TECHNICAL INDICATORS ({ticker})")
+            print(f"TECHNICAL INDICATORS ({ticker})")
             print("=" * 80)
             fetch_all_technical_indicators(ticker)
             
             # 10. Analytics (Premium)
             print("\n" + "=" * 80)
-            print(f"🔟 ANALYTICS (Premium) ({ticker})")
+            print(f"10. ANALYTICS (Premium) ({ticker})")
             print("=" * 80)
             fetch_analytics_fixed_window(ticker)
             fetch_analytics_sliding_window(ticker)
             
             # 11. Market Context (Ticker Specific)
             print("\n" + "=" * 80)
-            print(f"1️⃣1️⃣  MARKET CONTEXT ({ticker})")
+            print(f"MARKET CONTEXT ({ticker})")
             print("=" * 80)
             fetch_etf_holdings_that_own_stock(ticker)
 
@@ -1041,7 +1041,7 @@ def main():
         
         # 9. Economic Indicators
         print("\n" + "=" * 80)
-        print("9️⃣  ECONOMIC INDICATORS (Fed Data)")
+        print("ECONOMIC INDICATORS (Fed Data)")
         print("=" * 80)
         fetch_all_economic_indicators()
             
@@ -1049,17 +1049,17 @@ def main():
         fetch_top_gainers_losers()
         
     except KeyboardInterrupt:
-        print("\n\n⚠️  Interrupted by user")
+        print("\n\nWarning: Interrupted by user")
     except Exception as e:
-        print(f"\n\n❌ Error during data collection: {e}")
+        print(f"\n\nError during data collection: {e}")
         import traceback
         traceback.print_exc()
     
     print("\n" + "=" * 80)
-    print("✅ DATA COLLECTION COMPLETE!")
+    print("DATA COLLECTION COMPLETE!")
     print("=" * 80)
     print(f"Finished: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"\n📁 All data saved to: {OUTPUT_DIR}/")
+    print(f"\nAll data saved to: {OUTPUT_DIR}/")
 
 
 if __name__ == "__main__":

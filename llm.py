@@ -40,7 +40,7 @@ try:
         graph_db.setup_temporal_edges()
 except Exception:
     graph_db = None
-    print("⚠️ Neo4j not connected.")
+    print("Warning: Neo4j not connected.")
 
 
 def load_csv_data(ticker: str, file_suffix: str) -> dict:
@@ -92,7 +92,7 @@ def fetch_stock_price_history(ticker: str) -> pd.DataFrame:
                 df = df.sort_values('date')
             return df
         except Exception as e:
-            print(f"   ⚠️ Error loading daily data: {e}")
+            print(f"   Warning: loading daily data failed: {e}")
     
     # Fallback to weekly data
     filename = os.path.join(DATA_DIR, f"{ticker.upper()}_weekly_stock_data.csv")
@@ -108,7 +108,7 @@ def fetch_stock_price_history(ticker: str) -> pd.DataFrame:
                 df = df.sort_values('date')
             return df
         except Exception as e:
-            print(f"   ⚠️ Error loading weekly data: {e}")
+            print(f"   Warning: loading weekly data failed: {e}")
     
     return None
 
@@ -218,7 +218,7 @@ def get_economic_data_for_quarter(quarter_id: str, current_date: datetime = None
         economic_data['treasury_yield'] = float(treasury_value) if not pd.isna(treasury_value) else None
         
     except Exception as e:
-        print(f"   ⚠️ Error loading economic data for {quarter_id}: {e}")
+        print(f"   Warning: loading economic data failed for {quarter_id}: {e}")
     
     return economic_data
 
@@ -261,7 +261,7 @@ def load_earnings_transcript(ticker: str, quarter_id: str, current_date: datetim
                     if len(content) > 100:
                         return content
             except Exception as e:
-                print(f"   ⚠️ Error reading transcript: {e}")
+                print(f"   Warning: reading transcript failed: {e}")
     
     return ""
 
@@ -346,7 +346,7 @@ Provide your strategic analysis:"""
         )
         return response.choices[0].message.content
     except Exception as e:
-        print(f"   ❌ Error generating LLM analysis: {e}")
+        print(f"   Error generating LLM analysis: {e}")
         return ""
 
 
@@ -410,9 +410,9 @@ def generate_agentic_analysis(
     synthesizer = SynthesizerAgent(azure_client=azure_client)
     
     # ---- Agent 1: Extract Facts ----
-    print(f"   🔬 [FactExtractor] Extracting structured facts...")
+    print("   [FactExtractor] Extracting structured facts...")
     facts = fact_extractor.extract(transcript, ticker, quarter)
-    print(f"   ✅ Extracted {len(facts)} facts")
+    print(f"   Extracted {len(facts)} facts")
 
     # Delegation map (paper-style routing metadata)
     delegation = {}
@@ -434,20 +434,20 @@ def generate_agentic_analysis(
                         fact_embedding.tolist() if hasattr(fact_embedding, 'tolist') else fact_embedding
                     )
             except Exception as e:
-                print(f"   ⚠️ Could not store fact in graph: {e}")
+                print(f"   Warning: could not store fact in graph: {e}")
     
     # ---- Agent 2: Peer Comparison ----
-    print(f"   🏢 [PeerAnalyst] Comparing against sector peers...")
+    print("   [PeerAnalyst] Comparing against sector peers...")
     peer_result = peer_analyst.analyze(facts, ticker, quarter, embedder=vectorizer)
-    print(f"   ✅ Peer score: {peer_result.get('peer_score', 0):+.2f}")
+    print(f"   Peer score: {peer_result.get('peer_score', 0):+.2f}")
     
     # ---- Agent 3: Historical Analysis ----
-    print(f"   📈 [HistoricalAnalyst] Analyzing multi-quarter trends...")
+    print("   [HistoricalAnalyst] Analyzing multi-quarter trends...")
     historical_result = historical_analyst.analyze(facts, ticker, quarter, embedder=vectorizer)
-    print(f"   ✅ Momentum: {historical_result.get('momentum', 0):+.2f}")
+    print(f"   Momentum: {historical_result.get('momentum', 0):+.2f}")
     
     # ---- Agent 4: Synthesize Everything ----
-    print(f"   🧠 [Synthesizer] Combining all analyses...")
+    print("   [Synthesizer] Combining all analyses...")
     synthesis = synthesizer.synthesize(
         ticker=ticker,
         quarter=quarter,
@@ -490,7 +490,7 @@ def generate_agentic_analysis(
         "agent_confidences": agent_confidences,
     }
 
-    print(f"   ✅ Synthesis complete | Sentiment: {signals.get('overall_sentiment', 0):+.2f} | Risk: {signals.get('risk_level', 0.5):.2f}")
+    print(f"   Synthesis complete | Sentiment: {signals.get('overall_sentiment', 0):+.2f} | Risk: {signals.get('risk_level', 0.5):.2f}")
     
     return {
         "narrative": narrative,
@@ -514,10 +514,10 @@ def process_quarterly_context_and_generate_analysis(ticker: str, num_quarters: i
     
     Returns: (results_list, vectorizer_instance)
     """
-    print(f"\n🧠 Context Enriched RAG: Processing Quarterly Data...")
+    print("\nContext-enriched RAG: processing quarterly data...")
     
     # Initialize vectorizer once for all quarters
-    print(f"   🔢 Initializing vectorizer...")
+    print("   Initializing vectorizer...")
     vectorizer = NarrativeVectorizer()
     
     # Find available transcripts
@@ -528,7 +528,7 @@ def process_quarterly_context_and_generate_analysis(ticker: str, num_quarters: i
         files = glob.glob(pattern)
         
     if not files:
-        print("   ⚠️ No transcripts found.")
+        print("   Warning: No transcripts found.")
         return [], vectorizer
         
     files.sort(reverse=True)  # Newest first
@@ -541,13 +541,13 @@ def process_quarterly_context_and_generate_analysis(ticker: str, num_quarters: i
             year, quarter = parts[-2], parts[-1]
             quarter_id = f"{year}-{quarter}"
             
-            print(f"\n   📊 Processing Quarter: {quarter_id}")
+            print(f"\n   Processing Quarter: {quarter_id}")
             
             # 1. CHECK NEO4J CACHE
             if graph_db:
                 cached_data = graph_db.retrieve_quarterly_summary(ticker, quarter_id)
                 if cached_data and cached_data.get('embedding'):
-                    print(f"   ✅ [Cache Hit] Using stored analysis for {quarter_id}")
+                    print(f"   [Cache Hit] Using stored analysis for {quarter_id}")
                     results.append({
                         'quarter_id': quarter_id,
                         'analysis': cached_data['text'],
@@ -556,7 +556,7 @@ def process_quarterly_context_and_generate_analysis(ticker: str, num_quarters: i
                     continue
             
             # 2. BUILD COMPREHENSIVE CONTEXT
-            print(f"   📦 Building comprehensive context...")
+            print("   Building comprehensive context...")
             metrics = fetch_financial_metrics(ticker)
             context, economic_data, transcript = build_comprehensive_context(
                 ticker, quarter_id, metrics
@@ -575,15 +575,15 @@ def process_quarterly_context_and_generate_analysis(ticker: str, num_quarters: i
                 historical_context = graph_db.retrieve_all_context(ticker, max_quarter=quarter_id)
             
             # 4. GENERATE LLM ANALYSIS
-            print(f"   🤖 Generating LLM analysis...")
+            print("   Generating LLM analysis...")
             llm_analysis = generate_llm_analysis(context, historical_context)
             
             if not llm_analysis:
-                print(f"   ⚠️ Failed to generate analysis for {quarter_id}")
+                print(f"   Warning: Failed to generate analysis for {quarter_id}")
                 continue
             
             # 5. VECTORIZE LLM OUTPUT (this is the key!)
-            print(f"   🔢 Vectorizing LLM output...")
+            print("   Vectorizing LLM output...")
             embedding = vectorizer.get_embedding(llm_analysis)
             
             # 6. STORE IN NEO4J
@@ -599,10 +599,10 @@ def process_quarterly_context_and_generate_analysis(ticker: str, num_quarters: i
                 'embedding': embedding
             })
             
-            print(f"   ✅ Completed {quarter_id}")
+            print(f"   Completed {quarter_id}")
             
         except Exception as e:
-            print(f"   ❌ Error processing {filename}: {e}")
+            print(f"   Error processing {filename}: {e}")
     
     return results, vectorizer
 
@@ -648,50 +648,50 @@ def analyze_with_ai(profile, metrics, signal_data, user_query):
 
 def main():
     print("="*80)
-    print("🤖 INTELLISENSE: CONTEXT ENRICHED AGENTIC RAG SYSTEM")
+    print("IntelliSense — context-enriched agentic RAG")
     print("="*80)
     
     tickers = ["NVDA", "AAPL", "MSFT", "AMZN", "GOOGL", "META", "TSLA", "ASML", "TSM"]
     
     for ticker in tickers:
         print("\n" + "#"*80)
-        print(f"🚀 Processing Target: {ticker}")
+        print(f"Processing Target: {ticker}")
         print("#"*80)
         
         try:
             process_ticker(ticker)
         except Exception as e:
-            print(f"❌ Error processing {ticker}: {e}")
+            print(f"Error processing {ticker}: {e}")
 
 def process_ticker(ticker):
     
     # 1. Load Financials
-    print("\n📂 Loading Financial Data...")
+    print("\nLoading financial data...")
     profile = fetch_company_profile(ticker)
     metrics = fetch_financial_metrics(ticker)
     
     if not profile:
-        print("   ❌ Data not found.")
+        print("   Data not found.")
         return
 
     # 2. Load Stock Price History
-    print("\n📈 Loading Stock Price History...")
+    print("\nLoading stock price history...")
     price_history = fetch_stock_price_history(ticker)
     if price_history is not None:
-        print(f"   ✅ Loaded {len(price_history)} data points")
+        print(f"   Loaded {len(price_history)} data points")
     else:
-        print("   ⚠️ No price history found, proceeding without technical indicators")
+        print("   Warning: No price history found, proceeding without technical indicators")
 
     # 3. CONTEXT ENRICHED RAG PIPELINE
     print("\n" + "="*80)
-    print("🔄 CONTEXT ENRICHED AGENTIC RAG PIPELINE")
+    print("Context-enriched RAG pipeline")
     print("="*80)
     
     # Process quarterly contexts -> LLM analysis -> Vectorization
     quarterly_results, vectorizer = process_quarterly_context_and_generate_analysis(ticker, num_quarters=3)
     
     if not quarterly_results:
-        print("❌ Could not process quarterly data.")
+        print("Could not process quarterly data.")
         return
     
     # Get most recent analysis
@@ -699,14 +699,14 @@ def process_ticker(ticker):
     current_embedding = current_result['embedding']
     current_analysis = current_result['analysis']
     
-    print(f"\n📊 LLM Analysis Summary (Most Recent Quarter):")
+    print(f"\nLLM Analysis Summary (Most Recent Quarter):")
     print("="*80)
     print(current_analysis[:500] + "...")
     print("="*80)
     
     # 4. Initialize RL Agent (vectorizer already created and returned)
     embedding_dim = len(current_embedding)
-    print(f"\n🔢 Embedding Dimension: {embedding_dim}")
+    print(f"\nEmbedding dimension: {embedding_dim}")
     
     rl_agent = MarkovRLAgent(narrative_dim=embedding_dim)
     
@@ -721,10 +721,12 @@ def process_ticker(ticker):
         text=current_analysis, 
         embedding=current_embedding
     )
-    print(f"   🧩 Detected Narrative State: {narrative_state} (0=Bullish, 1=Neutral, 2=Bearish)")
+    print(
+        f"   Narrative state: {narrative_state} (0=bullish, 1=neutral, 2=bearish)"
+    )
     
     # 5. RL AGENT SIGNAL GENERATION
-    print("\n🧠 RL Agent: Generating Trading Signal...")
+    print("\nRL agent: generating trading signal...")
     print("   Inputs: LLM Embedding + Stock Price History + Financial Metrics")
     
     signal = rl_agent.get_signal(
@@ -736,7 +738,7 @@ def process_ticker(ticker):
     
     # 6. DISPLAY RESULTS
     print("\n" + "="*80)
-    print("📢 FINAL TRADING SIGNAL")
+    print("FINAL TRADING SIGNAL")
     print("="*80)
     print(f"   ACTION: {signal['action']}")
     print(f"   CONFIDENCE: {signal['confidence']:.2f}")
@@ -744,18 +746,18 @@ def process_ticker(ticker):
     
     if 'stock_features' in signal:
         features = signal['stock_features']
-        print(f"\n   📊 Technical Indicators:")
-        print(f"      • Momentum (5d-20d avg): {features['momentum']:.2f}%")
-        print(f"      • Trend (SMA20/SMA50): {features['trend']:.2f}%")
-        print(f"      • RSI (14-day): {features['rsi']:.1f}")
-        print(f"      • Volatility: {features['volatility']:.2f}%")
-        print(f"      • 1-day change: {features['price_change_1d']:.2f}%")
-        print(f"      • 5-day change: {features['price_change_5d']:.2f}%")
-        print(f"      • 20-day change: {features['price_change_20d']:.2f}%")
+        print(f"\n   Technical Indicators:")
+        print(f"      - Momentum (5d-20d avg): {features['momentum']:.2f}%")
+        print(f"      - Trend (SMA20/SMA50): {features['trend']:.2f}%")
+        print(f"      - RSI (14-day): {features['rsi']:.1f}")
+        print(f"      - Volatility: {features['volatility']:.2f}%")
+        print(f"      - 1-day change: {features['price_change_1d']:.2f}%")
+        print(f"      - 5-day change: {features['price_change_5d']:.2f}%")
+        print(f"      - 20-day change: {features['price_change_20d']:.2f}%")
     print("="*80 + "\n")
     
     # 7. Final Investment Memo
-    print("📝 GENERATING INVESTMENT MEMO...")
+    print("Generating investment memo...")
     memo = analyze_with_ai(profile, metrics, signal, None)
     print("\n" + "="*80)
     print("INVESTMENT MEMO")

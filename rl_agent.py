@@ -509,7 +509,10 @@ class MarkovRLAgent:
         # Optional: Print learning progress every 50 updates
         if self.total_updates % 50 == 0:
             avg_reward = np.mean([h['reward'] for h in self.learning_history[-50:]])
-            print(f"   🧠 RL Update #{self.total_updates} | Avg Reward (last 50): {avg_reward:.3f} | Q-change: {new_q - current_q:.4f}")
+            print(
+                f"   RL update #{self.total_updates} | avg reward (last 50): {avg_reward:.3f} | "
+                f"Q delta: {new_q - current_q:.4f}"
+            )
     
     def get_learning_stats(self) -> dict:
         """Get statistics about the learning progress."""
@@ -553,7 +556,7 @@ class MarkovRLAgent:
                 }
             }, f, indent=2)
         
-        print(f"💾 Q-table saved to {filepath}")
+        print(f"Q-table saved to {filepath}")
     
     def load_q_table(self, filepath: str):
         """Load learned Q-table from file."""
@@ -568,6 +571,6 @@ class MarkovRLAgent:
             for k, v in data['q_table'].items()
         }
         
-        print(f"📂 Q-table loaded from {filepath}")
+        print(f"Q-table loaded from {filepath}")
         print(f"   Learned states: {len(self.q_table)}")
         print(f"   Total updates: {data['learning_stats']['total_updates']}")

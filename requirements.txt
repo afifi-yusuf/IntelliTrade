@@ -2,8 +2,10 @@ openai
 python-dotenv
 httpx
 pandas
+numpy
 neo4j
 scikit-learn
 sentence-transformers
 torch
-
+matplotlib
+mplfinance

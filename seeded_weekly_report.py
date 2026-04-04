@@ -14,8 +14,6 @@ from paths import DATA_DIR, TEST_RESULTS_DIR
 DEFAULT_ASYNC_CSV = Path(TEST_RESULTS_DIR) / "seeded_weekly_full" / "seeded_weekly_async_by_ticker.csv"
 WEEKLY_DATA = f"{DATA_DIR}/{{t}}_weekly_stock_data.csv"
 
-_ICONS = {"DQN": "🟦", "No-LLM": "⬜", "B&H": "🟨"}
-
 _COLORS = {"dqn": "#4C72B0", "nollm": "#DD8452", "bah": "#55A868"}
 
 
@@ -43,7 +41,7 @@ def winner_icon(
         key = min(vals, key=vals.get)
     else:
         key = max(vals, key=vals.get)
-    return _ICONS[key]
+    return key
 
 
 def load_async_csv(csv_path: str | Path) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, float], list[str]]:
@@ -246,7 +244,7 @@ def print_scorecard(
 def max_return_table(summary: pd.DataFrame, tickers: Sequence[str]) -> pd.DataFrame:
     p = summary.pivot(index="ticker", columns="method", values="return_max_pct").loc[list(tickers)]
     p = p.rename(columns={"dqn": "DQN (LLM) max%", "dqn_nollm": "No-LLM max%"})
-    p["Winner"] = np.where(p["DQN (LLM) max%"] > p["No-LLM max%"], "🟦 DQN", "⬜ No-LLM")
+    p["Winner"] = np.where(p["DQN (LLM) max%"] > p["No-LLM max%"], "DQN (LLM)", "No-LLM")
     gap = (p["DQN (LLM) max%"] - p["No-LLM max%"]).round(1)
     p["Gap"] = gap.apply(lambda v: f"+{v}" if v > 0 else str(v))
     return p.round(1)

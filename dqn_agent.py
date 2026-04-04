@@ -272,7 +272,7 @@ class DQNAgent:
         self.reward_history = []
         self.nan_skips = 0
         
-        print(f"🧠 DQN Agent initialized on {self.device}")
+        print(f"DQN agent initialized on {self.device}")
         print(f"   State dim: {self.state_dim}, Action dim: {action_dim}")
         print(f"   Network: {sum(p.numel() for p in self.q_network.parameters())} parameters")
     
@@ -609,10 +609,10 @@ class DQNAgent:
                 # Print progress every 50 steps
                 if self.training_steps % 50 == 0 and self.training_steps > 0:
                     stats = self.get_learning_stats()
-                    print(f"   🧠 DQN Update #{self.training_steps} | "
-                          f"Loss: {stats['avg_loss']:.4f} | "
-                          f"ε: {stats['exploration_rate']:.3f} | "
-                          f"Buffer: {stats['buffer_size']}")
+                    print(f"   DQN update #{self.training_steps} | "
+                          f"loss: {stats['avg_loss']:.4f} | "
+                          f"epsilon: {stats['exploration_rate']:.3f} | "
+                          f"buffer: {stats['buffer_size']}")
         
         # Update last values for next iteration
         if not hasattr(self, 'last_state') or not hasattr(self, 'last_action_idx') or not hasattr(self, 'last_portfolio_value'):
@@ -658,7 +658,7 @@ class DQNAgent:
             'signal_delta_dim': self.signal_delta_dim,
             'context_meta_dim': self.context_meta_dim
         }, filepath)
-        print(f"💾 DQN model saved to {filepath}")
+        print(f"DQN model saved to {filepath}")
     
     def load_model(self, filepath: str):
         """Load DQN model"""
@@ -680,7 +680,7 @@ class DQNAgent:
         except Exception as e:
             loaded_q, total_q = _partial_load(self.q_network, checkpoint.get('q_network', {}))
             loaded_t, total_t = _partial_load(self.target_network, checkpoint.get('target_network', {}))
-            print(f"⚠️ Partial model load due to architecture mismatch: {e}")
+            print(f"Partial model load (architecture mismatch): {e}")
             print(f"   q_network: {loaded_q}/{total_q} tensors loaded")
             print(f"   target_network: {loaded_t}/{total_t} tensors loaded")
 
@@ -698,4 +698,4 @@ class DQNAgent:
         else:
             self.q_network.eval()
         self.target_network.eval()
-        print(f"📂 DQN model loaded from {filepath}")
+        print(f"DQN model loaded from {filepath}")

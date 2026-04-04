@@ -245,11 +245,11 @@ class Backtester:
                 self.price_data = self.price_data[self.price_data['timestamp'] >= cutoff]
                 if self.price_data.empty:
                     raise ValueError(f"No price data available after {self.start_date}")
-                logger.info(f"🗓️  Filtered backtest to start from: {self.start_date}")
+                logger.info("Filtered backtest to start from: %s", self.start_date)
             except Exception as e:
                 logger.error(f"Failed to filter by start_date: {e}")
                 
-        logger.info(f"📊 Loaded {len(self.price_data)} days of price data")
+        logger.info("Loaded %s days of price data", len(self.price_data))
         logger.info(f"   Date range: {self.price_data['timestamp'].min()} to {self.price_data['timestamp'].max()}")
         
     def get_trading_dates(self) -> List[datetime]:
@@ -466,12 +466,14 @@ class Backtester:
 
             # Initialize models if not already done (only once)
             if self.vectorizer is None:
-                logger.info("🔢 Initializing vectorizer (one-time setup)...")
+                logger.info("Initializing vectorizer (one-time setup)...")
                 self.vectorizer = NarrativeVectorizer()
-                logger.info(f"   ✅ Vectorizer ready ({self.vectorizer.embedding_dim} dimensions)")
+                logger.info(
+                    "   Vectorizer ready (%s dimensions)", self.vectorizer.embedding_dim
+                )
             
             if self.rl_agent is None:
-                logger.info("🤖 Initializing RL agent (one-time setup)...")
+                logger.info("Initializing RL agent (one-time setup)...")
                 self.rl_agent = MarkovRLAgent(
                     narrative_dim=self.vectorizer.embedding_dim,
                     learning_rate=self.learning_rate,
@@ -480,9 +482,14 @@ class Backtester:
                     enable_learning=self.enable_learning
                 )
                 if self.enable_learning:
-                    logger.info(f"   ✅ RL agent ready (Learning ENABLED: α={self.learning_rate}, γ={self.discount_factor}, ε={self.epsilon})")
+                    logger.info(
+                        "   RL agent ready (learning on: lr=%s, gamma=%s, epsilon=%s)",
+                        self.learning_rate,
+                        self.discount_factor,
+                        self.epsilon,
+                    )
                 else:
-                    logger.info("   ✅ RL agent ready (Learning DISABLED - using fixed Q-table)")
+                    logger.info("   RL agent ready (learning off — fixed Q-table)")
 
             if not self.use_llm_signals:
                 # Price-only mode: no LLM narrative, no earnings/transcript/economic context,
@@ -572,7 +579,7 @@ class Backtester:
                 else:
                     # Cache miss - use MULTI-AGENT pipeline
                     is_new_quarter = True
-                    print(f"   🔄 Running Multi-Agent Analysis for {recent_quarter} (first time)...")
+                    print(f"   Running multi-agent analysis for {recent_quarter} (first time)...")
                     
                     # Build context for this quarter
                     economic_data = get_economic_data_for_quarter(recent_quarter, current_date=date)
@@ -662,9 +669,9 @@ class Backtester:
                                 reliability=reliability,
                                 source_quarter=agentic_result.get("source_quarter", recent_quarter)
                             )
-                            print(f"   ✅ Cached multi-agent analysis for {recent_quarter}")
+                            print(f"   Cached multi-agent analysis for {recent_quarter}")
             except Exception as e:
-                logger.warning(f"⚠️ Multi-Agent pipeline unavailable. Falling back. Error: {e}")
+                logger.warning("Multi-agent pipeline unavailable; falling back. %s", e)
                 llm_analysis_text = "Technical Analysis Only (LLM Unavailable)"
                 embedding = np.zeros(self.vectorizer.embedding_dim, dtype=np.float64)
                 structured_signals = np.zeros(6, dtype=np.float32)
@@ -695,8 +702,9 @@ class Backtester:
             # Debug: Print sentiment analysis occasionally
             if np.random.random() < 0.1:  # 10% of trades
                 print(
-                    f"   🔍 DEBUG | Quarter: {recent_quarter} | State: {narrative_state} "
-                    f"(0=Bull, 1=Neut, 2=Bear) | Signals: {structured_signals} | ΔSignals: {structured_signal_deltas}"
+                    f"   DEBUG quarter={recent_quarter} state={narrative_state} "
+                    f"(0=bull 1=neutral 2=bear) signals={structured_signals} "
+                    f"delta_signals={structured_signal_deltas}"
                 )
             
             # Generate RL signal
@@ -729,7 +737,7 @@ class Backtester:
             return signal
             
         except Exception as e:
-            logger.error(f"❌ Error generating signal for {date.date()}: {e}")
+            logger.error("Error generating signal for %s: %s", date.date(), e)
             return {
                 "action": "HOLD",
                 "confidence": 0.0,
@@ -743,19 +751,22 @@ class Backtester:
         Run the backtest simulation
         """
         logger.info("=" * 80)
-        logger.info("🔄 STARTING BACKTEST")
+        logger.info("Starting backtest")
         logger.info("=" * 80)
-        logger.info(f"💰 Initial Capital: ${self.initial_capital:,.2f}")
-        logger.info(f"📊 Ticker: {self.ticker}")
-        logger.info(f"📅 Rebalance Frequency: {self.rebalance_frequency}")
-        logger.info(f"💸 Transaction Cost: {self.transaction_cost_pct * 100:.3f}%")
+        logger.info("Initial capital: $%.2f", self.initial_capital)
+        logger.info("Ticker: %s", self.ticker)
+        logger.info("Rebalance frequency: %s", self.rebalance_frequency)
+        logger.info("Transaction cost: %.3f%%", self.transaction_cost_pct * 100)
         if (not self.enable_learning) and self.stop_loss_pct > 0:
-            logger.info(f"🛑 Inference Stop-Loss: {self.stop_loss_pct * 100:.1f}% below avg entry")
+            logger.info(
+                "Inference stop-loss: %.1f%% below avg entry",
+                self.stop_loss_pct * 100,
+            )
         logger.info("")
         
         trading_dates = self.get_trading_dates()
         from dqn_agent import DQNAgent
-        logger.info(f"📅 Total trading dates: {len(trading_dates)}")
+        logger.info("Total trading dates: %s", len(trading_dates))
         logger.info(f"   First: {trading_dates[0].date()}")
         logger.info(f"   Last: {trading_dates[-1].date()}")
         logger.info("")
@@ -877,7 +888,9 @@ class Backtester:
             if self.rl_agent and self.rl_agent.enable_learning:
                 if signal.get('fallback_active', False):
                     # SKIP UPDATE if fallback was active (to avoid training on missing narrative)
-                    logger.debug(f"⚠️ Training update skipped for {date.date()} due to missing narrative data.")
+                    logger.debug(
+                        "Training update skipped for %s (missing narrative data)", date.date()
+                    )
                 else:
                     next_state_key = (
                         signal.get('narrative_state', 1),
@@ -891,16 +904,15 @@ class Backtester:
             
             # Display logic
             action_display = signal['action']
-            action_symbol = "⚪"
-            
+            action_symbol = "·"
             if signal['action'] == "BUY":
-                action_symbol = "🟢"
+                action_symbol = "+"
             elif signal['action'] == "SELL":
                 if self.portfolio.shares <= 0.001 and not executed:
-                     action_symbol = "⚪"
+                     action_symbol = "·"
                      action_display = "SKIP (Empty)"
                 else:
-                     action_symbol = "🔴"
+                     action_symbol = "-"
             
             print(
                 f"{action_symbol} {date.date()} | "
@@ -920,7 +932,7 @@ class Backtester:
         
         logger.info("")
         logger.info("=" * 80)
-        logger.info("📊 BACKTEST COMPLETE")
+        logger.info("Backtest complete")
         logger.info("=" * 80)
         
         # Diagnostic summary
@@ -940,7 +952,7 @@ class Backtester:
             ]
             avg_buy_size_pct = (np.mean(buy_sizes) * 100) if buy_sizes else 0.0
             
-            logger.info("📌 DIAGNOSTICS")
+            logger.info("Diagnostics")
             logger.info(f"Action Counts: BUY={action_counts['BUY']} | SELL={action_counts['SELL']} | HOLD={action_counts['HOLD']}")
             logger.info(f"Time in Market: {time_in_market_pct:.2f}%")
             logger.info(f"Avg Buy Size: {avg_buy_size_pct:.2f}% of portfolio value")
@@ -948,7 +960,7 @@ class Backtester:
         # Print RL learning statistics
         if self.rl_agent and self.rl_agent.enable_learning:
             logger.info("")
-            logger.info("🧠 Q-LEARNING STATISTICS")
+            logger.info("RL learning statistics")
             logger.info("=" * 80)
             stats = self.rl_agent.get_learning_stats()
             logger.info(f"Total Q-value updates: {stats['total_updates']}")
@@ -956,7 +968,10 @@ class Backtester:
             logger.info(f"Reward std dev: {stats.get('std_reward', 0.0):.4f}")
             logger.info(f"Avg Q-value change: {stats.get('avg_q_change', 0.0):.4f}")
             logger.info(f"Q-table size (states): {stats.get('q_table_size', 0)}")
-            logger.info(f"Exploration rate (ε): {stats.get('exploration_rate', 0.0):.2f}")
+            logger.info(
+                "Exploration rate (epsilon): %.2f",
+                stats.get("exploration_rate", 0.0),
+            )
             logger.info("")
             
             # Save learned model (Q-table or DQN)
@@ -1113,27 +1128,27 @@ class Backtester:
             f.write(f"  - Hold Days:          {metrics.hold_days}\n")
             f.write(f"Average Trade Size:     ${metrics.avg_trade_size:,.2f}\n")
         
-        logger.info(f"📁 Results exported to: {output_path.absolute()}")
+        logger.info("Results exported to: %s", output_path.absolute())
 
 
 def print_performance_summary(metrics: PerformanceMetrics):
     """Print formatted performance summary"""
     print("\n" + "=" * 80)
-    print("📊 BACKTEST PERFORMANCE SUMMARY")
+    print("BACKTEST PERFORMANCE SUMMARY")
     print("=" * 80)
-    print(f"💰 Initial Capital:        ${metrics.initial_capital:,.2f}")
-    print(f"💵 Final Portfolio Value:  ${metrics.final_portfolio_value:,.2f}")
-    print(f"📈 Total Return:           {metrics.total_return_pct:+.2f}%")
-    print(f"📊 Annualized Return:      {metrics.annualized_return_pct:+.2f}%")
-    print(f"📉 Sharpe Ratio:           {metrics.sharpe_ratio:.2f}")
-    print(f"⚠️  Max Drawdown:           {metrics.max_drawdown_pct:.2f}%")
-    print(f"🎯 Win Rate:               {metrics.win_rate:.2f}%")
+    print(f"Initial Capital:        ${metrics.initial_capital:,.2f}")
+    print(f"Final Portfolio Value:  ${metrics.final_portfolio_value:,.2f}")
+    print(f"Total Return:           {metrics.total_return_pct:+.2f}%")
+    print(f"Annualized Return:      {metrics.annualized_return_pct:+.2f}%")
+    print(f"Sharpe Ratio:           {metrics.sharpe_ratio:.2f}")
+    print(f"Max Drawdown:           {metrics.max_drawdown_pct:.2f}%")
+    print(f"Win Rate:               {metrics.win_rate:.2f}%")
     print("")
-    print(f"🔄 Total Trades:           {metrics.total_trades}")
-    print(f"   • Buy Trades:          {metrics.buy_trades}")
-    print(f"   • Sell Trades:         {metrics.sell_trades}")
-    print(f"   • Hold Days:           {metrics.hold_days}")
-    print(f"💵 Average Trade Size:     ${metrics.avg_trade_size:,.2f}")
+    print(f"Total Trades:           {metrics.total_trades}")
+    print(f"  Buy Trades:           {metrics.buy_trades}")
+    print(f"  Sell Trades:          {metrics.sell_trades}")
+    print(f"  Hold Days:            {metrics.hold_days}")
+    print(f"Average Trade Size:     ${metrics.avg_trade_size:,.2f}")
     print("=" * 80)
 
 
@@ -1144,8 +1159,8 @@ if __name__ == "__main__":
     ticker = "NVDA"
     financial_data = fetch_financial_metrics(ticker)
     
-    print("\n💡 INFO: Backtest uses lazy caching - LLM analyses are generated once per quarter")
-    print("         and cached in Neo4j. Subsequent trades reuse cached analyses.\n")
+    print("\nNote: backtest uses lazy caching — LLM analyses once per quarter,")
+    print("      stored in Neo4j; later dates reuse cached analyses.\n")
     
     # Run backtest (now FAST - no LLM calls!)
     backtester = Backtester(

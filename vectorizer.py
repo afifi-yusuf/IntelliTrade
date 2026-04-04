@@ -61,20 +61,20 @@ class NarrativeVectorizer:
         # Try to initialize embedding models in order of preference
         if SENTENCE_TRANSFORMERS_AVAILABLE:
             try:
-                print(f"   🤗 Loading Hugging Face model: {model_name}")
+                print(f"   Loading Hugging Face model: {model_name}")
                 self.embedding_model = SentenceTransformer(model_name)
                 self.embedding_dim = self.embedding_model.get_sentence_embedding_dimension()
                 self.embedding_type = 'huggingface'
-                print(f"   ✅ Using Hugging Face embeddings ({self.embedding_dim} dimensions)")
+                print(f"   Using Hugging Face embeddings ({self.embedding_dim} dimensions)")
             except Exception as e:
-                print(f"   ⚠️ Failed to load Hugging Face model: {e}")
+                print(f"   Warning: Failed to load Hugging Face model: {e}")
                 self.embedding_model = None
         
         # Fallback to Azure if HF not available
         if self.embedding_model is None and azure_client is not None and OPENAI_AVAILABLE:
             self.embedding_dim = embedding_dim or 1536
             self.embedding_type = 'azure'
-            print(f"   ☁️ Using Azure OpenAI embeddings ({self.embedding_dim} dimensions)")
+            print(f"   Using Azure OpenAI embeddings ({self.embedding_dim} dimensions)")
         
         # Final fallback to TF-IDF
         if self.embedding_model is None and azure_client is None:
@@ -85,7 +85,7 @@ class NarrativeVectorizer:
             )
             self.embedding_dim = 100
             self.embedding_type = 'tfidf'
-            print(f"   📊 Using TF-IDF vectorization ({self.embedding_dim} dimensions)")
+            print(f"   Using TF-IDF vectorization ({self.embedding_dim} dimensions)")
         
         # KMeans for discrete state clustering
         self.kmeans = KMeans(n_clusters=3, random_state=42)
@@ -122,7 +122,7 @@ class NarrativeVectorizer:
                 self.embedding_cache[cache_key] = embedding
                 return embedding
             except Exception as e:
-                print(f"   ⚠️ Hugging Face embedding error: {e}")
+                print(f"   Warning: Hugging Face embedding error: {e}")
         
         # Try Azure OpenAI
         if self.embedding_type == 'azure' and self.azure_client is not None:
@@ -135,7 +135,7 @@ class NarrativeVectorizer:
                 self.embedding_cache[cache_key] = embedding
                 return embedding
             except Exception as e:
-                print(f"   ⚠️ Azure embedding error: {e}. Falling back to TF-IDF.")
+                print(f"   Warning: Azure embedding error: {e}. Falling back to TF-IDF.")
         
         # Fallback to TF-IDF
         embedding = self._get_tfidf_embedding(text)
@@ -180,14 +180,14 @@ class NarrativeVectorizer:
                 'neutral': self.get_embedding(neutral_anchor_text),
                 'bearish': self.get_embedding(bearish_anchor_text)
             }
-            logger.info("   ✅ Sentiment anchors initialized")
+            logger.info("   Sentiment anchors initialized")
     
     def fit(self, texts: list, embeddings: Optional[list] = None):
         """
         No-op function kept for backward compatibility.
         Sentiment now determined via zero-shot cosine similarity to anchors.
         """
-        print("   ✅ [Vectorizer] Ready (using zero-shot sentiment classification)")
+        print("   [Vectorizer] Ready (using zero-shot sentiment classification)")
         self.is_fitted = True  # Always "fitted" since we don't need training
 
     def get_narrative_state(self, text: str = None, embedding: np.ndarray = None) -> int:

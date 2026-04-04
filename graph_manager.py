@@ -171,7 +171,7 @@ class Neo4jHandler:
         try:
             with self.driver.session() as session:
                 session.run(query)
-            logger.info("⚠️  CLEARED ENTIRE GRAPH DATABASE")
+            logger.info("Cleared entire graph database")
         except Exception as e:
             logger.error(f"Error clearing graph: {e}")
 

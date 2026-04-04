@@ -9,8 +9,10 @@ from typing import Sequence
 import numpy as np
 import pandas as pd
 
-DEFAULT_ASYNC_CSV = Path("test_results/seeded_weekly_full/seeded_weekly_async_by_ticker.csv")
-WEEKLY_DATA = "data/{t}_weekly_stock_data.csv"
+from paths import DATA_DIR, TEST_RESULTS_DIR
+
+DEFAULT_ASYNC_CSV = Path(TEST_RESULTS_DIR) / "seeded_weekly_full" / "seeded_weekly_async_by_ticker.csv"
+WEEKLY_DATA = f"{DATA_DIR}/{{t}}_weekly_stock_data.csv"
 
 _ICONS = {"DQN": "🟦", "No-LLM": "⬜", "B&H": "🟨"}
 

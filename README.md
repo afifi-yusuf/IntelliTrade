@@ -22,7 +22,8 @@ Full architecture, schema, and training details: **[`PROJECT_DESIGN_IMPLEMENTATI
 | **`upload_graph.py`** | Standalone **bulk loader** from `data/` into Neo4j (e.g. Mag7-oriented flows); optional if you mainly populate via `run.py backtest`. |
 | **`agents/`** | Fact extractor, peer/historical analysts, synthesizer (`agents/*.py`); imported by `llm.py`. |
 | **`data.py`** | Alpha Vantage download jobs → **`data/*.csv`**. |
-| **`vectorizer.py`** | Embeddings + **`dqn_state_dim()`** (DQN input size). |
+| **`paths.py`** | Shared directory names (`BACKTEST_RESULTS_DIR`, `DATA_DIR`, `TEST_RESULTS_DIR`). |
+| **`vectorizer.py`** | Embeddings + **`dqn_state_dim()`** / **`DEFAULT_EMBEDDING_MODEL`**. |
 | **`reproducibility.py`** | **`set_random_seed`** shared by training and **`seeded_weekly_compare.py`**. |
 | **`seeded_weekly_compare.py`** | Long-running benchmark: seed loop, train, backtest per ticker, CSV aggregates, minimal generated notebook. |
 | **`seeded_weekly_report.py`** | Analysis helpers for **`notebooks/backtest_analysis_seeded_weekly_compare.ipynb`**. |

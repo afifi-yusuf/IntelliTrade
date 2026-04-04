@@ -15,6 +15,7 @@ from agents import FactExtractorAgent, PeerAnalystAgent, HistoricalAnalystAgent,
 
 # Import sector mapping for graph initialization
 from agents.peer_analyst import SECTOR_MAP
+from paths import DATA_DIR
 
 load_dotenv()
 
@@ -40,8 +41,6 @@ try:
 except Exception:
     graph_db = None
     print("⚠️ Neo4j not connected.")
-
-DATA_DIR = "data"
 
 
 def load_csv_data(ticker: str, file_suffix: str) -> dict:
@@ -519,7 +518,7 @@ def process_quarterly_context_and_generate_analysis(ticker: str, num_quarters: i
     
     # Initialize vectorizer once for all quarters
     print(f"   🔢 Initializing vectorizer...")
-    vectorizer = NarrativeVectorizer(model_name='all-MiniLM-L6-v2')
+    vectorizer = NarrativeVectorizer()
     
     # Find available transcripts
     pattern = os.path.join(DATA_DIR, f"{ticker.upper()}_earnings_transcript_*.txt")

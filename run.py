@@ -6,20 +6,21 @@ import sys
 import os
 from typing import Optional
 
-# Core imports
 from backtest import Backtester
 from llm import fetch_financial_metrics
 from llm import main as run_main_agent
+from paths import BACKTEST_RESULTS_DIR, TEST_RESULTS_DIR
 from train import train_agent
 
-def _walkforward_model_path(model_prefix: str, rebalance_frequency: str = 'weekly') -> str:
-    """Resolve default walk-forward model path for a frequency."""
-    if rebalance_frequency == 'weekly':
-        return f'backtest_results/{model_prefix}_walkforward_final.pth'
-    if model_prefix.endswith('_model'):
+
+def _walkforward_model_path(model_prefix: str, rebalance_frequency: str = "weekly") -> str:
+    b = BACKTEST_RESULTS_DIR
+    if rebalance_frequency == "weekly":
+        return f"{b}/{model_prefix}_walkforward_final.pth"
+    if model_prefix.endswith("_model"):
         base = model_prefix[:-6]
-        return f'backtest_results/{base}_{rebalance_frequency}_model_walkforward_final.pth'
-    return f'backtest_results/{model_prefix}_{rebalance_frequency}_walkforward_final.pth'
+        return f"{b}/{base}_{rebalance_frequency}_model_walkforward_final.pth"
+    return f"{b}/{model_prefix}_{rebalance_frequency}_walkforward_final.pth"
 
 
 def collect_data(ticker: str, api_key: Optional[str] = None):
@@ -90,7 +91,7 @@ def run_backtest(
         from dqn_agent import DQNAgent
         from vectorizer import NarrativeVectorizer, dqn_state_dim
 
-        vectorizer = NarrativeVectorizer(model_name='all-MiniLM-L6-v2')
+        vectorizer = NarrativeVectorizer()
         state_dim = dqn_state_dim(vectorizer.embedding_dim)
 
         backtester.rl_agent = DQNAgent(
@@ -115,7 +116,7 @@ def run_backtest(
             from rl_agent import MarkovRLAgent
             from vectorizer import NarrativeVectorizer
             print("⏳ Initializing Vectorizer for Q-Learning...")
-            vectorizer = NarrativeVectorizer(model_name='all-MiniLM-L6-v2')
+            vectorizer = NarrativeVectorizer()
             backtester.vectorizer = vectorizer
             
             backtester.rl_agent = MarkovRLAgent(
@@ -159,13 +160,13 @@ def run_backtest(
     # Save model if requested
     if save_model and enable_learning:
         if method == 'qlearning' and hasattr(backtester.rl_agent, 'save_q_table'):
-            filepath = f'backtest_results/learned_q_table_{ticker}.json'
+            filepath = f"{BACKTEST_RESULTS_DIR}/learned_q_table_{ticker}.json"
             backtester.rl_agent.save_q_table(filepath)
             print(f"\n💾 Q-table saved to: {filepath}")
         
         elif method in ('dqn', 'dqn_nollm') and hasattr(backtester.rl_agent, 'save_model'):
             prefix = 'dqn_nollm_model' if method == 'dqn_nollm' else 'dqn_model'
-            filepath = f'backtest_results/{prefix}_{ticker}.pth'
+            filepath = f"{BACKTEST_RESULTS_DIR}/{prefix}_{ticker}.pth"
             backtester.rl_agent.save_model(filepath)
             print(f"\n💾 DQN model saved to: {filepath}")
     
@@ -280,7 +281,7 @@ def compare_methods(
     print("💾 SAVING DETAILED HISTORY")
     print(f"{'='*80}")
     
-    results_dir = "test_results"
+    results_dir = TEST_RESULTS_DIR
     os.makedirs(results_dir, exist_ok=True)
     
     import json

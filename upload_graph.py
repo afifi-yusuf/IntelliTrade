@@ -6,15 +6,12 @@ from datetime import datetime
 from typing import Dict, Any, List, Optional
 from graph_manager import Neo4jHandler
 from dotenv import load_dotenv
+from paths import DATA_DIR
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 load_dotenv()
-
-# Configuration
-DATA_DIR = "data"
 MAG7_TICKERS = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "TSM", "ASML"]
 
 class Mag7Uploader:

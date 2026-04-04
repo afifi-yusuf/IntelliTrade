@@ -11,15 +11,12 @@ from data import TICKERS
 from llm import fetch_financial_metrics
 from backtest import Backtester
 from dqn_agent import DQNAgent
+from paths import BACKTEST_RESULTS_DIR
 from reproducibility import set_random_seed
 from rl_agent import MarkovRLAgent
 from vectorizer import NarrativeVectorizer, dqn_state_dim
 
-# Configure logging
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("train")
-
-# Suppress other loggers
 logging.getLogger("backtest").setLevel(logging.WARNING)
 logging.getLogger("graph_manager").setLevel(logging.WARNING)
 
@@ -59,7 +56,7 @@ def train_agent(
 
     # 1. Initialize Shared Resources
     print("⏳ Initializing Vectorizer (this takes a moment)...")
-    vectorizer = NarrativeVectorizer(model_name='all-MiniLM-L6-v2')
+    vectorizer = NarrativeVectorizer()
     state_dim = dqn_state_dim(vectorizer.embedding_dim)
     print(f"   ✅ Vectorizer initialized. Dim: {vectorizer.embedding_dim}")
 
@@ -97,7 +94,7 @@ def train_agent(
     # 3. Pre-load Financial Data
     print("⏳ Pre-loading financial data & filtering dates...")
     financial_data_cache = {}
-    results_dir = "backtest_results"
+    results_dir = BACKTEST_RESULTS_DIR
     os.makedirs(results_dir, exist_ok=True)
     
     cutoff_dt = datetime.strptime(train_cutoff_date, "%Y-%m-%d")

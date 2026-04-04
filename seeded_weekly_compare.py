@@ -11,6 +11,7 @@ from typing import List
 import pandas as pd
 
 from data import TICKERS
+from paths import BACKTEST_RESULTS_DIR
 from reproducibility import set_random_seed
 from run import run_backtest
 from train import train_agent
@@ -25,10 +26,11 @@ def parse_seed_list(seed_text: str) -> List[int]:
 
 
 def weekly_final_model_path(method: str) -> str:
+    b = BACKTEST_RESULTS_DIR
     if method == "dqn":
-        return "backtest_results/dqn_model_walkforward_final.pth"
+        return f"{b}/dqn_model_walkforward_final.pth"
     if method == "dqn_nollm":
-        return "backtest_results/dqn_nollm_model_walkforward_final.pth"
+        return f"{b}/dqn_nollm_model_walkforward_final.pth"
     raise ValueError(f"Unsupported method: {method}")
 
 
@@ -148,7 +150,7 @@ def main() -> None:
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    model_dir = Path("backtest_results/seed_runs")
+    model_dir = Path(BACKTEST_RESULTS_DIR) / "seed_runs"
     model_dir.mkdir(parents=True, exist_ok=True)
     log_path = output_dir / "seeded_weekly_compare.log"
 

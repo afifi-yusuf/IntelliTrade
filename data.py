@@ -9,12 +9,13 @@ import json
 import time
 from typing import Dict, List, Optional
 
+from paths import DATA_DIR as OUTPUT_DIR
+
 load_dotenv()
 
 ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
 BASE_URL = "https://www.alphavantage.co/query"
 TICKERS = ["SPY", "NVDA", "AAPL", "MSFT", "AMZN", "GOOGL", "META", "TSLA", "ASML", "TSM"]
-OUTPUT_DIR = "data"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 

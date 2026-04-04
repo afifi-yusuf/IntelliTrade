@@ -1,16 +1,4 @@
-"""
-Backtesting Engine for IntelliSense Trading System
-
-This module simulates historical trading performance using the Context Enriched
-Agentic RAG system with RL-based trading signals.
-
-Key Features:
-- Realistic portfolio simulation (cash, positions, value tracking)
-- Transaction costs (optional)
-- Performance metrics (returns, Sharpe, drawdown, win rate)
-- Trade log and equity curve generation
-- Avoids look-ahead bias (only uses data available at each point in time)
-"""
+"""Historical portfolio simulation with optional LLM/DQN signals and point-in-time data."""
 
 import pandas as pd
 import numpy as np
@@ -29,6 +17,7 @@ from llm import (
     generate_llm_analysis,
     generate_agentic_analysis
 )
+from paths import BACKTEST_RESULTS_DIR
 from vectorizer import NarrativeVectorizer
 from rl_agent import MarkovRLAgent
 from graph_manager import Neo4jHandler
@@ -478,7 +467,7 @@ class Backtester:
             # Initialize models if not already done (only once)
             if self.vectorizer is None:
                 logger.info("🔢 Initializing vectorizer (one-time setup)...")
-                self.vectorizer = NarrativeVectorizer(model_name='all-MiniLM-L6-v2')
+                self.vectorizer = NarrativeVectorizer()
                 logger.info(f"   ✅ Vectorizer ready ({self.vectorizer.embedding_dim} dimensions)")
             
             if self.rl_agent is None:
@@ -971,7 +960,7 @@ class Backtester:
             logger.info("")
             
             # Save learned model (Q-table or DQN)
-            results_path = Path("backtest_results")
+            results_path = Path(BACKTEST_RESULTS_DIR)
             results_path.mkdir(exist_ok=True)
             
             # Check which type of agent and call appropriate save method
@@ -1073,7 +1062,7 @@ class Backtester:
             history=history
         )
     
-    def export_results(self, metrics: PerformanceMetrics, output_dir: str = "backtest_results"):
+    def export_results(self, metrics: PerformanceMetrics, output_dir: str = BACKTEST_RESULTS_DIR):
         """Export backtest results to files"""
         output_path = Path(output_dir)
         output_path.mkdir(exist_ok=True)

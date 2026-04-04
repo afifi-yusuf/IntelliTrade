@@ -16,6 +16,8 @@ from collections import deque, namedtuple
 import random
 from typing import Tuple, List, Optional
 
+from vectorizer import DQN_STATE_SCALAR_DIM
+
 # Experience tuple for replay buffer
 Experience = namedtuple('Experience', 
                        ['state', 'action', 'reward', 'next_state', 'done'])
@@ -39,16 +41,7 @@ class DQNNetwork(nn.Module):
         self.structured_signal_dim = 6
         self.signal_delta_dim = 6
         self.context_meta_dim = 5
-        self.expected_state_dim = (
-            self.embedding_dim
-            + self.tech_dim
-            + self.narrative_cat_dim
-            + self.financial_cat_dim
-            + self.position_dim
-            + self.structured_signal_dim
-            + self.signal_delta_dim
-            + self.context_meta_dim
-        )
+        self.expected_state_dim = self.embedding_dim + DQN_STATE_SCALAR_DIM
 
         self.price_input_dim = self.tech_dim + self.financial_cat_dim + self.position_dim
         self.context_input_dim = (

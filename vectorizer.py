@@ -22,6 +22,8 @@ try:
 except ImportError:
     SENTENCE_TRANSFORMERS_AVAILABLE = False
 
+DEFAULT_EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+
 # Appended to narrative embedding in DQN state (must match `backtest` feature layout)
 DQN_STATE_SCALAR_DIM = 7 + 3 + 2 + 1 + 6 + 6 + 5
 
@@ -38,7 +40,7 @@ class NarrativeVectorizer:
     2. Azure OpenAI (requires API key)
     3. TF-IDF (fallback)
     """
-    def __init__(self, azure_client=None, model_name='all-MiniLM-L6-v2', embedding_dim=None):
+    def __init__(self, azure_client=None, model_name=DEFAULT_EMBEDDING_MODEL, embedding_dim=None):
         """
         Initialize vectorizer with embedding model.
         

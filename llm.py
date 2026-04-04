@@ -37,15 +37,13 @@ try:
             graph_db.ingest_sector(ticker, sector)
         # Create temporal edges between quarters
         graph_db.setup_temporal_edges()
-except:
+except Exception:
     graph_db = None
     print("⚠️ Neo4j not connected.")
 
 DATA_DIR = "data"
 
-# ============================================================================
-# DATA LOADING (LOCAL)
-# ============================================================================
+
 def load_csv_data(ticker: str, file_suffix: str) -> dict:
     filename = os.path.join(DATA_DIR, f"{ticker.upper()}_{file_suffix}")
     if not os.path.exists(filename):
@@ -58,8 +56,9 @@ def load_csv_data(ticker: str, file_suffix: str) -> dict:
     try:
         df = pd.read_csv(filename)
         return df.to_dict(orient="records")
-    except:
+    except Exception:
         return None
+
 
 def fetch_company_profile(ticker: str) -> dict:
     data = load_csv_data(ticker, "company_overview.csv")
@@ -305,10 +304,6 @@ def build_comprehensive_context(ticker: str, quarter_id: str,
     context += f"\n## EARNINGS TRANSCRIPT\n{transcript[:15000]}\n"
     
     return context, economic_data, transcript
-
-# ============================================================================
-# SIGNAL GENERATION & ANALYSIS
-# ============================================================================
 
 
 def generate_llm_analysis(comprehensive_context: str, graph_context: str) -> str:
@@ -648,7 +643,7 @@ def analyze_with_ai(profile, metrics, signal_data, user_query):
             temperature=0.7
         )
         return response.choices[0].message.content
-    except:
+    except Exception:
         return "Analysis failed."
 
 

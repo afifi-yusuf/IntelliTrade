@@ -1,73 +1,4 @@
-"""
-Alpha Vantage Premium Data Collection Script for Tech Tickers
-==============================================================
-
-Comprehensive data collection from Alpha Vantage API covering:
-
-1. STOCK PRICE DATA (Multiple Timeframes)
-   - Daily adjusted OHLCV (5 years)
-   - Weekly adjusted OHLCV (full history)
-   - Monthly adjusted OHLCV (full history)
-   - Latest real-time quote
-
-2. FUNDAMENTAL DATA
-   - Company overview & metrics
-   - Income statements (annual & quarterly)
-   - Balance sheets (annual & quarterly)
-   - Cash flow statements (annual & quarterly)
-   - Shares outstanding history
-
-3. EARNINGS DATA
-   - Historical earnings (annual & quarterly with EPS surprises)
-   - Forward earnings estimates
-   - Earnings calendar
-
-4. EARNINGS CALL TRANSCRIPTS (Premium)
-   - Last 20 quarters of transcripts (5 years)
-
-5. CORPORATE ACTIONS
-   - Dividend history
-   - Stock split history
-
-6. NEWS & SENTIMENT (Premium)
-   - Up to 1000 recent news articles
-   - Sentiment scores & relevance
-
-7. INSIDER TRANSACTIONS (Premium)
-   - Insider buying/selling activity
-
-8. TECHNICAL INDICATORS (5 years)
-   - Moving Averages: SMA (50, 200), EMA (12, 26)
-   - Momentum: RSI, MACD, STOCH, CCI
-   - Volatility: Bollinger Bands, ATR
-   - Trend: ADX, AROON
-   - Volume: OBV, AD
-   - VWAP (Premium)
-
-9. ECONOMIC INDICATORS (Federal Reserve Data)
-   - Federal Funds Rate
-   - Treasury Yield (10-year)
-   - Real GDP & GDP per Capita
-   - CPI & Inflation Rate
-   - Unemployment Rate
-   - Nonfarm Payroll
-   - Retail Sales
-   - Durable Goods Orders
-
-10. ANALYTICS (Premium)
-    - Fixed window analysis
-    - Sliding window analysis
-
-11. MARKET CONTEXT
-    - Top gainers & losers
-    - Most actively traded
-    - ETF holdings (which major ETFs hold the stock)
-
-All data saved as CSV files for offline analysis.
-
-Requires: Alpha Vantage Premium API key in .env file
-Output: data/ directory with CSV files and transcript text files
-"""
+"""Fetch market, fundamentals, transcripts, and related CSVs via Alpha Vantage (needs ALPHA_VANTAGE_API_KEY in .env)."""
 
 import os
 import httpx
@@ -80,25 +11,19 @@ from typing import Dict, List, Optional
 
 load_dotenv()
 
-# Configuration
 ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
 BASE_URL = "https://www.alphavantage.co/query"
 TICKERS = ["SPY", "NVDA", "AAPL", "MSFT", "AMZN", "GOOGL", "META", "TSLA", "ASML", "TSM"]
-OUTPUT_DIR = "data"  # Directory to save CSV files
-
-# Create output directory if it doesn't exist
+OUTPUT_DIR = "data"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# Rate limiting helper (Premium allows more calls, but still good to be safe)
-def rate_limit_sleep(seconds=0.5):
-    """Sleep to avoid rate limiting"""
+
+def rate_limit_sleep(seconds: float = 0.5) -> None:
     time.sleep(seconds)
 
 
 def make_request(params: Dict) -> Optional[Dict]:
-    """Make API request with error handling"""
-    params['apikey'] = ALPHA_VANTAGE_API_KEY
-    
+    params["apikey"] = ALPHA_VANTAGE_API_KEY
     try:
         with httpx.Client(timeout=60.0) as client:
             response = client.get(BASE_URL, params=params)
@@ -122,9 +47,7 @@ def make_request(params: Dict) -> Optional[Dict]:
         return None
 
 
-# ============================================================================
 # 1. STOCK PRICE DATA (DAILY, WEEKLY, MONTHLY)
-# ============================================================================
 
 def fetch_daily_stock_data(ticker: str):
     """Fetch daily stock data for ticker (5 years of history)"""
@@ -268,9 +191,7 @@ def fetch_quote_endpoint(ticker: str):
     rate_limit_sleep()
 
 
-# ============================================================================
 # 2. FUNDAMENTAL DATA
-# ============================================================================
 
 def fetch_company_overview(ticker: str):
     """Fetch company overview and fundamentals"""
@@ -527,9 +448,7 @@ def fetch_splits(ticker: str):
     rate_limit_sleep()
 
 
-# ============================================================================
 # 3. EARNINGS CALL TRANSCRIPTS AND CALENDAR (PREMIUM FEATURE)
-# ============================================================================
 
 def fetch_earnings_calendar(ticker: str):
     """Fetch earnings calendar"""
@@ -675,9 +594,7 @@ def fetch_all_recent_earnings_transcripts(ticker: str):
         print(f"\n  ⚠️  No transcripts available (may require specific Premium tier)")
 
 
-# ============================================================================
 # 4. NEWS AND SENTIMENT (PREMIUM FEATURE)
-# ============================================================================
 
 def fetch_news_sentiment(ticker: str):
     """Fetch news and sentiment data"""
@@ -726,9 +643,7 @@ def fetch_news_sentiment(ticker: str):
     rate_limit_sleep()
 
 
-# ============================================================================
 # 5. INSIDER TRANSACTIONS
-# ============================================================================
 
 def fetch_insider_transactions(ticker: str):
     """Fetch insider transaction data"""
@@ -754,9 +669,7 @@ def fetch_insider_transactions(ticker: str):
     rate_limit_sleep()
 
 
-# ============================================================================
 # 6. TECHNICAL INDICATORS
-# ============================================================================
 
 def fetch_technical_indicator(ticker: str, indicator: str, params: Dict, filename: str):
     """Generic function to fetch technical indicators"""
@@ -838,9 +751,7 @@ def fetch_all_technical_indicators(ticker: str):
         fetch_technical_indicator(ticker, name, params, filename)
 
 
-# ============================================================================
 # 7. ECONOMIC INDICATORS (FED DATA)
-# ============================================================================
 
 def fetch_economic_indicator(indicator_name: str, function: str, filename: str):
     """Generic function to fetch economic indicators"""
@@ -901,9 +812,7 @@ def fetch_all_economic_indicators():
         fetch_economic_indicator(name, function, filename)
 
 
-# ============================================================================
 # 8. ANALYTICS (PREMIUM FEATURE)
-# ============================================================================
 
 def fetch_analytics_fixed_window(ticker: str):
     """Fetch analytics with fixed window"""
@@ -986,9 +895,7 @@ def fetch_top_gainers_losers():
     rate_limit_sleep()
 
 
-# ============================================================================
 # 9. ADDITIONAL CONTEXT
-# ============================================================================
 
 def fetch_etf_holdings_that_own_stock(ticker: str):
     """Find which ETFs hold the stock (requires knowing major ETF symbols)"""
@@ -1032,9 +939,7 @@ def fetch_etf_holdings_that_own_stock(ticker: str):
         print("  ℹ️  No ETF holdings data found")
 
 
-# ============================================================================
 # MAIN EXECUTION
-# ============================================================================
 
 def main():
     """Main function to fetch all data"""
@@ -1154,7 +1059,6 @@ def main():
     print("=" * 80)
     print(f"Finished: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"\n📁 All data saved to: {OUTPUT_DIR}/")
-    print(f"\n� Check {OUTPUT_DIR}/ for results.")
 
 
 if __name__ == "__main__":

@@ -11,8 +11,9 @@ from data import TICKERS
 from llm import fetch_financial_metrics
 from backtest import Backtester
 from dqn_agent import DQNAgent
+from reproducibility import set_random_seed
 from rl_agent import MarkovRLAgent
-from vectorizer import NarrativeVectorizer
+from vectorizer import NarrativeVectorizer, dqn_state_dim
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -41,13 +42,7 @@ def train_agent(
     rebalance_frequency: str = "weekly",
     seed: int = None
 ):
-    """
-    Unified training loop for RL agents (DQN or Q-Learning).
-    
-    METHODOLOGY (SOTA):
-    - Strict Time-Series Split: Train on data BEFORE cutoff, Test on data AFTER.
-    - Cache Warmup: Epoch 1 may persist quarter summaries; later epochs run read-only.
-    """
+    """Train DQN / Q-learning on pre-cutoff data; Neo4j writes only on epoch 1 when LLM is on."""
     print(f"🚀 INITIALIZING {method.upper()} PRE-TRAINING (WALK-FORWARD)")
     print(f"================================================================================")
     print(f"   Target Tickers: {', '.join(TICKERS)}")
@@ -60,24 +55,12 @@ def train_agent(
     print(f"================================================================================")
 
     if seed is not None:
-        random.seed(seed)
-        np.random.seed(seed)
-        os.environ["PYTHONHASHSEED"] = str(seed)
-        try:
-            import torch
-            torch.manual_seed(seed)
-            if torch.cuda.is_available():
-                torch.cuda.manual_seed_all(seed)
-            if hasattr(torch.backends, "cudnn"):
-                torch.backends.cudnn.deterministic = True
-                torch.backends.cudnn.benchmark = False
-        except Exception:
-            pass
+        set_random_seed(seed)
 
     # 1. Initialize Shared Resources
     print("⏳ Initializing Vectorizer (this takes a moment)...")
     vectorizer = NarrativeVectorizer(model_name='all-MiniLM-L6-v2')
-    state_dim = vectorizer.embedding_dim + 7 + 3 + 2 + 1 + 6 + 6 + 5  # +7 technical features, +6 structured signals, +6 signal deltas, +5 context reliability
+    state_dim = dqn_state_dim(vectorizer.embedding_dim)
     print(f"   ✅ Vectorizer initialized. Dim: {vectorizer.embedding_dim}")
 
     is_dqn = method in ('dqn', 'dqn_nollm')
@@ -133,8 +116,6 @@ def train_agent(
             print(f"   ⚠️ Failed to load {ticker}: {e}")
 
     valid_tickers = list(financial_data_cache.keys())
-    # Persist quarter summaries across epochs while staying read-only.
-    # Keyed by ticker because each Backtester instance is single-ticker.
     shared_summary_cache_by_ticker = {ticker: {} for ticker in valid_tickers}
     print(f"   Ready to train on {len(valid_tickers)} tickers.")
     print(f"================================================================================")
@@ -153,15 +134,13 @@ def train_agent(
             display_epsilon = current_epsilon
         else:
             display_epsilon = agent.epsilon if hasattr(agent, 'epsilon') else 0.0
-        # Warm Neo4j cache on epoch 1 for LLM-enabled training, then lock to read-only.
-        # This preserves deterministic training data usage while avoiding repeated LLM calls
-        # across restarts once cache has been populated.
         epoch_read_only = not (use_llm_signals and epoch == 1)
 
         print(f"\n⚡ EPOCH {epoch}/{epochs} (ε={display_epsilon:.3f})")
         if use_llm_signals:
-            mode = "READ-ONLY (cache reuse)" if epoch_read_only else "CACHE WARMUP (writes enabled)"
-            print(f"   🗄️ Neo4j mode: {mode}")
+            print(
+                f"   🗄️ Neo4j: {'READ-ONLY' if epoch_read_only else 'CACHE WARMUP (writes)'}"
+            )
         random.shuffle(valid_tickers) 
         
         epoch_rewards = []
@@ -191,10 +170,6 @@ def train_agent(
                     backtester.rl_agent = agent
                     backtester.vectorizer = vectorizer
                     
-                    # ----------------------------------------------------
-                    # CRITICAL: TIME-SERIES SPLIT
-                    # Filter the backtester's price data to ONLY include past data
-                    # ----------------------------------------------------
                     original_len = len(backtester.price_data)
                     backtester.price_data = backtester.price_data[backtester.price_data['timestamp'] < cutoff_dt]
                     filtered_len = len(backtester.price_data)

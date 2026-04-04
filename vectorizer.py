@@ -22,6 +22,14 @@ try:
 except ImportError:
     SENTENCE_TRANSFORMERS_AVAILABLE = False
 
+# Appended to narrative embedding in DQN state (must match `backtest` feature layout)
+DQN_STATE_SCALAR_DIM = 7 + 3 + 2 + 1 + 6 + 6 + 5
+
+
+def dqn_state_dim(embedding_dim: int) -> int:
+    return embedding_dim + DQN_STATE_SCALAR_DIM
+
+
 class NarrativeVectorizer:
     """
     Handles the Vectorization of LLM outputs using embeddings.

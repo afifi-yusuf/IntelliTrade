@@ -1,13 +1,5 @@
 #!/usr/bin/env python3
-"""
-IntelliSense - Context Enriched Agentic RAG Trading System
-
-Single entry point for all operations:
-- Collect data from Alpha Vantage
-- Run RAG pipeline (LLM analysis with Neo4j)
-- Backtest trading strategies (Fixed Q-table, Q-learning, DQN)
-- Compare methods
-"""
+"""CLI: data collection, RAG, training, backtest, method comparison."""
 
 import argparse
 import sys
@@ -96,12 +88,11 @@ def run_backtest(
     # For DQN, replace the RL agent
     if method in ('dqn', 'dqn_nollm'):
         from dqn_agent import DQNAgent
-        from vectorizer import NarrativeVectorizer
-        
-        # Derive state dimension from embedding + features
+        from vectorizer import NarrativeVectorizer, dqn_state_dim
+
         vectorizer = NarrativeVectorizer(model_name='all-MiniLM-L6-v2')
-        state_dim = vectorizer.embedding_dim + 7 + 3 + 2 + 1 + 6 + 6 + 5  # +7 technical features, +6 structured signals, +6 signal deltas, +5 context reliability
-        
+        state_dim = dqn_state_dim(vectorizer.embedding_dim)
+
         backtester.rl_agent = DQNAgent(
             state_dim=state_dim,
             embedding_dim=vectorizer.embedding_dim,
@@ -114,7 +105,7 @@ def run_backtest(
             try:
                 backtester.rl_agent.load_model(model_path)
                 print(f"🧠 Loaded DQN Agent from {model_path}")
-            except:
+            except Exception:
                 print(f"⚠️ Could not load model from {model_path}, using fresh agent")
         else:
             print(f"🧠 Initialized Fresh DQN Agent (state_dim={state_dim})")

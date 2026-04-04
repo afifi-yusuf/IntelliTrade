@@ -151,7 +151,7 @@ class Mag7Uploader:
                         try:
                             dt = pd.to_datetime(date_str)
                             quarter_id = f"{dt.year}-Q{(dt.month - 1) // 3 + 1}"
-                        except:
+                        except (ValueError, TypeError):
                             continue
 
                         for metric in metrics:
@@ -181,7 +181,7 @@ class Mag7Uploader:
                                             prev_y = int(year_str)
                                             prev_q = q_curr - 1
                                         prev_fact_id = f"{ticker}_{prev_y}-Q{prev_q}_{metric}"
-                                    except:
+                                    except (ValueError, TypeError):
                                         prev_fact_id = None
                                         
                                     fact_data = {
@@ -298,12 +298,12 @@ class Mag7Uploader:
                      if row_dt.year == target_year and row_q == target_q:
                          for f in fields:
                              if f in row:
-                                 try:
-                                     metrics[f] = float(row[f])
-                                 except:
-                                     pass
-                         break # Found the row for this quarter
-             except:
+                                try:
+                                    metrics[f] = float(row[f])
+                                except (ValueError, TypeError):
+                                    pass
+                         break
+             except Exception:
                  pass
                  
         return metrics

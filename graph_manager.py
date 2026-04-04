@@ -296,7 +296,7 @@ class Neo4jHandler:
             
             prev_quarter = f"{prev_year}-Q{prev_q_num}"
             prev_fact_id = f"{ticker}_{prev_quarter}_{metric}"
-        except:
+        except Exception:
             prev_fact_id = None
 
         fact_data = {

@@ -1,48 +1,23 @@
 #!/usr/bin/env python3
-"""
-Seeded weekly benchmark:
-- Train 5 seeded runs for DQN and DQN no-LLM
-- Evaluate on selected tickers with 10% stop-loss (inference-only)
-- Save raw + aggregated CSVs
-- Generate a comparison notebook (mean/std per ticker)
-"""
+"""Train seeded DQN vs DQN-no-LLM weekly runs, backtest, write CSVs and a minimal generated notebook."""
 
 import argparse
 import contextlib
 import json
-import os
-import random
 import shutil
 from pathlib import Path
 from typing import List
 
-import numpy as np
 import pandas as pd
 
 from data import TICKERS
+from reproducibility import set_random_seed
 from run import run_backtest
 from train import train_agent
 
 
 DEFAULT_SEEDS = [11, 22, 33, 44, 55]
 DEFAULT_TICKERS = [t for t in TICKERS if t != "SPY"]
-
-
-def set_global_seed(seed: int) -> None:
-    random.seed(seed)
-    np.random.seed(seed)
-    os.environ["PYTHONHASHSEED"] = str(seed)
-    try:
-        import torch
-
-        torch.manual_seed(seed)
-        if torch.cuda.is_available():
-            torch.cuda.manual_seed_all(seed)
-        if hasattr(torch.backends, "cudnn"):
-            torch.backends.cudnn.deterministic = True
-            torch.backends.cudnn.benchmark = False
-    except Exception:
-        pass
 
 
 def parse_seed_list(seed_text: str) -> List[int]:
@@ -187,7 +162,7 @@ def main() -> None:
     for method in methods:
         for seed in seeds:
             print(f"\n=== Training {method} | seed={seed} | weekly ===")
-            set_global_seed(seed)
+            set_random_seed(seed)
             train_agent(
                 method=method,
                 epochs=args.epochs,
@@ -262,29 +237,28 @@ def main() -> None:
     summary_csv = output_dir / "seeded_weekly_summary.csv"
     summary_df.to_csv(summary_csv, index=False)
 
-    comparison_rows = []
-    for ticker in sorted(summary_df["ticker"].unique()):
-        dqn_row = summary_df[(summary_df["ticker"] == ticker) & (summary_df["method"] == "dqn")]
-        nollm_row = summary_df[(summary_df["ticker"] == ticker) & (summary_df["method"] == "dqn_nollm")]
-        if dqn_row.empty or nollm_row.empty:
-            continue
-        dqn_ret = float(dqn_row["return_mean_pct"].iloc[0])
-        nollm_ret = float(nollm_row["return_mean_pct"].iloc[0])
-        comparison_rows.append(
-            {
-                "ticker": ticker,
-                "dqn_return_mean_pct": dqn_ret,
-                "dqn_nollm_return_mean_pct": nollm_ret,
-                "llm_minus_nollm_return_mean_pct": dqn_ret - nollm_ret,
+    pt = summary_df.pivot(index="ticker", columns="method", values="return_mean_pct")
+    comparison_df = (
+        pt.dropna()
+        .rename(
+            columns={
+                "dqn": "dqn_return_mean_pct",
+                "dqn_nollm": "dqn_nollm_return_mean_pct",
             }
         )
-    comparison_df = pd.DataFrame(comparison_rows).sort_values("ticker")
+        .assign(
+            llm_minus_nollm_return_mean_pct=lambda d: d["dqn_return_mean_pct"]
+            - d["dqn_nollm_return_mean_pct"]
+        )
+        .reset_index()
+        .sort_values("ticker")
+    )
     comparison_csv = output_dir / "seeded_weekly_delta.csv"
     comparison_df.to_csv(comparison_csv, index=False)
 
-    notebook_path = Path("backtest_analysis_seeded_weekly_compare.ipynb")
+    gen_nb = output_dir / "seeded_weekly_generated.ipynb"
     build_notebook(
-        notebook_path=notebook_path,
+        notebook_path=gen_nb,
         summary_csv=summary_csv,
         raw_csv=raw_csv,
         tickers=tickers,
@@ -294,7 +268,8 @@ def main() -> None:
     print(f"Raw runs: {raw_csv.as_posix()}")
     print(f"Summary: {summary_csv.as_posix()}")
     print(f"Delta: {comparison_csv.as_posix()}")
-    print(f"Notebook: {notebook_path.as_posix()}")
+    print(f"Auto notebook (minimal): {gen_nb.as_posix()}")
+    print("Full analysis: backtest_analysis_seeded_weekly_compare.ipynb")
 
 
 if __name__ == "__main__":

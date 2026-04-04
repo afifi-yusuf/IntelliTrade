@@ -4,6 +4,29 @@ Context-enriched RL trading: local CSVs + **Neo4j** (causal-temporal graph) + mu
 
 Full architecture, schema, and training details: **[`PROJECT_DESIGN_IMPLEMENTATION.md`](PROJECT_DESIGN_IMPLEMENTATION.md)**.
 
+**Layout:** Python entry points and engines stay at the **repository root** on purpose (`python run.py`, `python train.py`, stable imports). Only **`agents/`** (LLM sub-agents) and **`notebooks/`** are separate folders today; moving `run.py` / `train.py` into a package would need a small compatibility shim—worth doing only if you want a pip-installable module.
+
+---
+
+## Code map
+
+| Module | Role |
+|--------|------|
+| **`run.py`** | Main CLI: `collect`, `rag`, `train`, `backtest`, `compare`, `quickstart`; wires `train_agent` and `Backtester`. |
+| **`train.py`** | Multi-ticker walk-forward training loop; shared DQN or Q-learning agent; epoch / Neo4j read-only behavior. |
+| **`backtest.py`** | `Backtester`: simulation, rewards, execution frequency, confidence sizing, stop-loss, calls into RL/LLM path. |
+| **`dqn_agent.py`** | DQN network + replay; used for `dqn` / `dqn_nollm`. |
+| **`rl_agent.py`** | Tabular Q-learning agent (`qlearning` method). |
+| **`llm.py`** | Azure OpenAI client, Neo4j bootstrap, **multi-agent orchestration** (`generate_agentic_analysis`, loaders for local CSVs). |
+| **`graph_manager.py`** | **Neo4j** schema, ingestion, vector index, Cypher helpers (CTKG). |
+| **`upload_graph.py`** | Standalone **bulk loader** from `data/` into Neo4j (e.g. Mag7-oriented flows); optional if you mainly populate via `run.py backtest`. |
+| **`agents/`** | Fact extractor, peer/historical analysts, synthesizer (`agents/*.py`); imported by `llm.py`. |
+| **`data.py`** | Alpha Vantage download jobs → **`data/*.csv`**. |
+| **`vectorizer.py`** | Embeddings + **`dqn_state_dim()`** (DQN input size). |
+| **`reproducibility.py`** | **`set_random_seed`** shared by training and **`seeded_weekly_compare.py`**. |
+| **`seeded_weekly_compare.py`** | Long-running benchmark: seed loop, train, backtest per ticker, CSV aggregates, minimal generated notebook. |
+| **`seeded_weekly_report.py`** | Analysis helpers for **`notebooks/backtest_analysis_seeded_weekly_compare.ipynb`**. |
+
 ---
 
 ## Setup
@@ -75,10 +98,3 @@ Rich tables and plots: open **`notebooks/backtest_analysis_seeded_weekly_compare
 | **`backtest_results/`** | Checkpoints (`*_walkforward_final.pth`), Q-tables, seed copies |
 | **`test_results/`** | Run logs, histories, seeded summaries, generated `seeded_weekly_generated.ipynb` |
 
----
-
-## Shared Python utilities
-
-- **`reproducibility.py`** — `set_random_seed` for training/benchmarks  
-- **`vectorizer.py`** — `dqn_state_dim()` / `DQN_STATE_SCALAR_DIM` (single source for DQN input size)  
-- **`seeded_weekly_report.py`** — helpers for the seeded weekly notebook  

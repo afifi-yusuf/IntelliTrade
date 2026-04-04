@@ -107,7 +107,7 @@ def train_agent(
                 financial_data_cache[ticker] = fetch_financial_metrics(ticker)
             print(f"  {ticker}: ok")
         except Exception as e:
-            print(f"  {ticker}: failed — {e}")
+            print(f"  {ticker}: failed: {e}")
 
     valid_tickers = list(financial_data_cache.keys())
     shared_summary_cache_by_ticker = {ticker: {} for ticker in valid_tickers}

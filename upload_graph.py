@@ -1,11 +1,12 @@
-import os
-import pandas as pd
 import json
 import logging
-from datetime import datetime
-from typing import Dict, Any, List, Optional
-from graph_manager import Neo4jHandler
+import os
+from typing import Any, Dict, List, Optional
+
+import pandas as pd
 from dotenv import load_dotenv
+
+from graph_manager import Neo4jHandler
 from paths import DATA_DIR
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -14,6 +15,7 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 MAG7_TICKERS = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "TSM", "ASML"]
 
+
 class Mag7Uploader:
     def __init__(self):
         self.graph = Neo4jHandler()
@@ -21,11 +23,8 @@ class Mag7Uploader:
         self._load_economic_data()
 
     def clear_database(self):
-        """Clear existing data in Neo4j."""
+        """Clear Neo4j data and re-apply constraints (IF NOT EXISTS)."""
         self.graph.clear_graph()
-        # Re-apply constraints after clearing if needed, but graph_manager __init__ calls setup_constraints
-        # ideally we should re-run setup_constraints, but for now let's assume they persist or we might need to call it explicitly.
-        # graph_manager.py setup_constraints checks IF NOT EXISTS so it's safe to call again.
         self.graph.setup_constraints()
 
     def close(self):

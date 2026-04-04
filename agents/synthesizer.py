@@ -139,7 +139,7 @@ Synthesize all inputs into a strategic assessment:"""
         
         lines = []
         for f in facts:
-            line = f"• {f['metric']}: {f['value']}"
+            line = f"- {f['metric']}: {f['value']}"
             if f.get('change'):
                 line += f" ({f['change']})"
             if f.get('sentiment'):
@@ -170,7 +170,7 @@ Synthesize all inputs into a strategic assessment:"""
         for key, value in economic_data.items():
             if value is not None:
                 display_key = key.replace("_", " ").title()
-                lines.append(f"• {display_key}: {value}")
+                lines.append(f"- {display_key}: {value}")
         return "\n".join(lines) if lines else "No economic data available."
     
     def _parse_response(self, raw: str) -> tuple:

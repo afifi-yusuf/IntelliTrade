@@ -25,7 +25,7 @@ Focus on:
 3. How current performance compares to the company's own trajectory
 4. Whether management guidance has been reliable historically
 
-Be specific — reference actual numbers and quarters. Keep to 150-200 words.
+Be specific; reference actual numbers and quarters. Keep to 150-200 words.
 
 On the LAST line, output two scores as floats between -1.0 and 1.0:
 - revenue_trend: revenue momentum direction
@@ -187,7 +187,7 @@ Analyze the historical trends and current trajectory:"""
         """Format current quarter facts."""
         lines = [f"Facts for {ticker} ({quarter}):"]
         for f in facts:
-            line = f"  • {f['metric']}: {f['value']}"
+            line = f"  - {f['metric']}: {f['value']}"
             if f.get('change'):
                 line += f" ({f['change']})"
             lines.append(line)
@@ -202,7 +202,7 @@ Analyze the historical trends and current trajectory:"""
         if metric_trends:
             lines.append("METRIC TRENDS (QoQ from Knowledge Graph):")
             for metric, trend_data in metric_trends.items():
-                trend_str = " → ".join([
+                trend_str = " -> ".join([
                     f"{t.get('quarter', '?')}: {t.get('value', '?')}"
                     for t in trend_data
                 ])
@@ -218,7 +218,7 @@ Analyze the historical trends and current trajectory:"""
                     metric = f.get("metric", f.get("metric_name", "?"))
                     value = f.get("value", "?")
                     quarter = f.get("quarter", "?")
-                    lines.append(f"  • {quarter} — {metric}: {value}")
+                    lines.append(f"  - {quarter} - {metric}: {value}")
         
         return "\n".join(lines) if lines else "No historical data available."
     

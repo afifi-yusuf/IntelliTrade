@@ -228,7 +228,7 @@ class MarkovRLAgent:
         
         # If narrative_state not provided, infer from vector
         if narrative_state is None:
-            # Default to Neutral — np.mean(embedding) is unreliable for sentiment
+            # Default to Neutral; np.mean(embedding) is unreliable for sentiment
             # The vectorizer's cosine-similarity method (used in backtest) is preferred
             narrative_state = 1  # Neutral
         
@@ -244,11 +244,11 @@ class MarkovRLAgent:
         trend = stock_features.get("trend", 0)
         
         if position_ratio > 0.5:
-            # Heavily invested — boost SELL, penalize BUY
+            # Heavily invested: boost SELL, penalize BUY
             adjusted_q_values["SELL"] += 0.3 * position_ratio
             adjusted_q_values["BUY"] -= 0.5 * position_ratio
         elif position_ratio < 0.1:
-            # No position — can't sell what we don't own
+            # No position: can't sell what we don't own
             adjusted_q_values["SELL"] -= 1.0
             
             # Only encourage buying if technicals support it
@@ -256,10 +256,10 @@ class MarkovRLAgent:
                 adjusted_q_values["BUY"] += 0.4
                 adjusted_q_values["HOLD"] -= 0.2  # Penalize sitting on sidelines during uptrend
             elif momentum < -3 or trend < -2:
-                # Technicals are bearish — sitting out IS the right move
+                # Technicals are bearish; sitting out IS the right move
                 adjusted_q_values["HOLD"] += 0.1
             else:
-                # Neutral technicals — slight nudge toward BUY
+                # Neutral technicals: slight nudge toward BUY
                 adjusted_q_values["BUY"] += 0.15
         
         # Dampen extreme HOLD dominance from the Q-table (softer compression)
@@ -267,7 +267,7 @@ class MarkovRLAgent:
         max_action_q = max(adjusted_q_values["BUY"], adjusted_q_values["SELL"])
         hold_gap = hold_q - max_action_q
         if hold_gap > 0.8:
-            # Compress only the excess — HOLD stays preferred but not insurmountable
+            # Compress only the excess; HOLD stays preferred but not insurmountable
             adjusted_q_values["HOLD"] -= (hold_gap - 0.8) * 0.3
         
         # Structured signals from multi-agent analysis
@@ -368,13 +368,13 @@ class MarkovRLAgent:
             adjusted["BUY"] -= 0.35
         
         # RSI adjustments (overbought/oversold)
-        if rsi > 70:  # Overbought — strong SELL signal
+        if rsi > 70:  # Overbought: strong SELL signal
             adjusted["SELL"] += 0.5
             adjusted["BUY"] -= 0.5
         elif rsi > 60:  # Moderately overbought
             adjusted["SELL"] += 0.2
             adjusted["BUY"] -= 0.15
-        elif rsi < 30:  # Oversold — strong BUY signal
+        elif rsi < 30:  # Oversold: strong BUY signal
             adjusted["BUY"] += 0.4
             adjusted["SELL"] -= 0.3
         elif rsi < 40:  # Moderately oversold
@@ -484,7 +484,7 @@ class MarkovRLAgent:
         # Get max Q-value for next state
         max_next_q = max(next_q_values.values()) if next_q_values else 0.0
         
-        # Q-learning update: Q(s,a) ← Q(s,a) + α[r + γ*max(Q(s',a')) - Q(s,a)]
+        # Q-learning update: Q(s,a) <- Q(s,a) + alpha * (r + gamma * max Q(s',a') - Q(s,a))
         new_q = current_q + self.alpha * (reward + self.gamma * max_next_q - current_q)
         
         # Update Q-table

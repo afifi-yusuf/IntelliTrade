@@ -361,7 +361,7 @@ def generate_agentic_analysis(
     2. Facts stored in Neo4j with embeddings
     3. PeerAnalyst queries graph for peer comparison
     4. HistoricalAnalyst queries graph for historical trends
-    5. Synthesizer combines everything → narrative + structured signals
+    5. Synthesizer combines everything into narrative + structured signals
     
     Returns: {
         "narrative": str,
@@ -426,7 +426,7 @@ def generate_agentic_analysis(
             try:
                 fact_text = f"{fact['metric']}: {fact['value']}"
                 if fact.get('context'):
-                    fact_text += f" — {fact['context']}"
+                    fact_text += f" - {fact['context']}"
                 fact_embedding = vectorizer.get_embedding(fact_text)
                 if fact_embedding is not None:
                     gdb.ingest_fact_with_embedding(
@@ -648,7 +648,7 @@ def analyze_with_ai(profile, metrics, signal_data, user_query):
 
 def main():
     print("="*80)
-    print("IntelliSense — context-enriched agentic RAG")
+    print("IntelliSense: context-enriched agentic RAG")
     print("="*80)
     
     tickers = ["NVDA", "AAPL", "MSFT", "AMZN", "GOOGL", "META", "TSLA", "ASML", "TSM"]

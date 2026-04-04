@@ -19,7 +19,7 @@ _COLORS = {"dqn": "#4C72B0", "nollm": "#DD8452", "bah": "#55A868"}
 
 def fmt_mean_std(mean: float, std: float, dm: int = 2, ds: int | None = None) -> str:
     if pd.isna(mean) or pd.isna(std):
-        return "—"
+        return "-"
     ds = dm if ds is None else ds
     return f"{mean:.{dm}f} ± {std:.{ds}f}"
 
@@ -36,7 +36,7 @@ def winner_icon(
         vals["B&H"] = bah_val
     vals = {k: v for k, v in vals.items() if pd.notna(v)}
     if not vals:
-        return "—"
+        return "-"
     if lower_is_better:
         key = min(vals, key=vals.get)
     else:
@@ -140,25 +140,25 @@ def comparison_table(
         nl = s.loc[(t, "dqn_nollm")]
         bh = bah_ix.loc[t]
         wr_ok = pd.notna(d["win_rate_mean"]) or pd.notna(nl["win_rate_mean"])
-        wr_star = winner_icon(d["win_rate_mean"], nl["win_rate_mean"]) if wr_ok else "—"
+        wr_star = winner_icon(d["win_rate_mean"], nl["win_rate_mean"]) if wr_ok else "-"
         rows.append(
             {
                 "Ticker": t,
                 "B&H Return %": f"{bh:.2f}%",
                 "DQN Return %": fmt_mean_std(d["return_mean_pct"], d["return_std_pct"], 2, 2) + "%",
                 "No-LLM Return %": fmt_mean_std(nl["return_mean_pct"], nl["return_std_pct"], 2, 2) + "%",
-                "★ Return": winner_icon(d["return_mean_pct"], nl["return_mean_pct"], bh),
+                "* Return": winner_icon(d["return_mean_pct"], nl["return_mean_pct"], bh),
                 "DQN Sharpe": fmt_mean_std(d["sharpe_mean"], d["sharpe_std"], 2, 2),
                 "No-LLM Sharpe": fmt_mean_std(nl["sharpe_mean"], nl["sharpe_std"], 2, 2),
-                "★ Sharpe": winner_icon(d["sharpe_mean"], nl["sharpe_mean"]),
+                "* Sharpe": winner_icon(d["sharpe_mean"], nl["sharpe_mean"]),
                 "DQN MaxDD %": fmt_mean_std(d["max_drawdown_mean"], d["max_drawdown_std"], 1, 1),
                 "No-LLM MaxDD %": fmt_mean_std(nl["max_drawdown_mean"], nl["max_drawdown_std"], 1, 1),
-                "★ MaxDD": winner_icon(
+                "* MaxDD": winner_icon(
                     d["max_drawdown_mean"], nl["max_drawdown_mean"], lower_is_better=True
                 ),
                 "DQN Win Rate %": fmt_mean_std(d["win_rate_mean"], d["win_rate_std"]),
                 "No-LLM Win Rate %": fmt_mean_std(nl["win_rate_mean"], nl["win_rate_std"]),
-                "★ Win Rate": wr_star,
+                "* Win Rate": wr_star,
             }
         )
     return pd.DataFrame(rows).set_index("Ticker")
@@ -188,7 +188,7 @@ def plot_panels(
         ax.bar(x, nollm[col], w, yerr=nollm[err], capsize=3, label="No-LLM", color=_COLORS["nollm"])
         if ptitle == "Total Return %":
             ax.bar(x + w, bah_ret, w, label="Buy & Hold", color=_COLORS["bah"], alpha=0.85)
-        ax.set_title(ptitle + ("  (lower = better ↓)" if invert_y else ""))
+        ax.set_title(ptitle + ("  (lower = better)" if invert_y else ""))
         ax.set_xticks(x)
         ax.set_xticklabels(tickers, rotation=45, ha="right")
         ax.axhline(0, color="black", linewidth=0.6)
@@ -218,26 +218,26 @@ def print_scorecard(
     print("=== Score Card ===\n")
     if dqn["win_rate_mean"].notna().any():
         print(
-            f"DQN (LLM) beats No-LLM  →  Return: {wins_ret}/{n}  |  Sharpe: {wins_sr}/{n}  "
-            f"|  Win Rate: {wins_wr}/{n}  |  Lower MaxDD: {wins_dd}/{n}"
+            f"DQN (LLM) beats No-LLM | Return: {wins_ret}/{n} | Sharpe: {wins_sr}/{n} "
+            f"| Win Rate: {wins_wr}/{n} | Lower MaxDD: {wins_dd}/{n}"
         )
     else:
         print(
-            f"DQN (LLM) beats No-LLM  →  Return: {wins_ret}/{n}  |  Sharpe: {wins_sr}/{n}  "
-            f"|  Lower MaxDD: {wins_dd}/{n}"
+            f"DQN (LLM) beats No-LLM | Return: {wins_ret}/{n} | Sharpe: {wins_sr}/{n} "
+            f"| Lower MaxDD: {wins_dd}/{n}"
         )
         print("(Win rate not in CSV export.)")
 
     d_bah = sum(dqn.loc[t, "return_mean_pct"] > bah_ix.loc[t] for t in tickers)
     nl_bah = sum(nollm.loc[t, "return_mean_pct"] > bah_ix.loc[t] for t in tickers)
-    print(f"Beats Buy & Hold         →  DQN: {d_bah}/{n}  |  No-LLM: {nl_bah}/{n}")
+    print(f"Beats Buy & Hold | DQN: {d_bah}/{n} | No-LLM: {nl_bah}/{n}")
     print("\nAverages across all tickers:")
-    print(f"  Sharpe    — DQN: {dqn['sharpe_mean'].mean():.2f}  |  No-LLM: {nollm['sharpe_mean'].mean():.2f}")
-    print(f"  MaxDD %   — DQN: {dqn['max_drawdown_mean'].mean():.1f}  |  No-LLM: {nollm['max_drawdown_mean'].mean():.1f}")
+    print(f"  Sharpe: DQN {dqn['sharpe_mean'].mean():.2f} | No-LLM {nollm['sharpe_mean'].mean():.2f}")
+    print(f"  MaxDD %: DQN {dqn['max_drawdown_mean'].mean():.1f} | No-LLM {nollm['max_drawdown_mean'].mean():.1f}")
     if dqn["win_rate_mean"].notna().any():
         print(
-            f"  Win Rate% — DQN: {dqn['win_rate_mean'].mean():.1f}  "
-            f"|  No-LLM: {nollm['win_rate_mean'].mean():.1f}"
+            f"  Win Rate%: DQN {dqn['win_rate_mean'].mean():.1f} "
+            f"| No-LLM {nollm['win_rate_mean'].mean():.1f}"
         )
 
 

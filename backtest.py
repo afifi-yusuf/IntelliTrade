@@ -489,7 +489,7 @@ class Backtester:
                         self.epsilon,
                     )
                 else:
-                    logger.info("   RL agent ready (learning off — fixed Q-table)")
+                    logger.info("   RL agent ready (learning off; fixed Q-table)")
 
             if not self.use_llm_signals:
                 # Price-only mode: no LLM narrative, no earnings/transcript/economic context,
@@ -1159,7 +1159,7 @@ if __name__ == "__main__":
     ticker = "NVDA"
     financial_data = fetch_financial_metrics(ticker)
     
-    print("\nNote: backtest uses lazy caching — LLM analyses once per quarter,")
+    print("\nNote: backtest uses lazy caching: LLM analyses once per quarter,")
     print("      stored in Neo4j; later dates reuse cached analyses.\n")
     
     # Run backtest (now FAST - no LLM calls!)

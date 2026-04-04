@@ -189,7 +189,7 @@ Compare {ticker} against its peers and assess relative performance:"""
         """Format target facts for the prompt."""
         lines = [f"Key Facts for {ticker}:"]
         for f in facts:
-            line = f"  • {f['metric']}: {f['value']}"
+            line = f"  - {f['metric']}: {f['value']}"
             if f.get('change'):
                 line += f" ({f['change']})"
             lines.append(line)
@@ -209,7 +209,7 @@ Compare {ticker} against its peers and assess relative performance:"""
                 metric = f.get("metric", f.get("metric_name", "?"))
                 value = f.get("value", "?")
                 quarter = f.get("quarter", "")
-                lines.append(f"    • {metric}: {value} ({quarter})")
+                lines.append(f"    - {metric}: {value} ({quarter})")
         
         return "\n".join(lines) if lines else "No peer data available."
     

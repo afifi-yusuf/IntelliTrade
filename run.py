@@ -23,7 +23,7 @@ def _walkforward_model_path(model_prefix: str, rebalance_frequency: str = "weekl
     return f"{b}/{model_prefix}_{rebalance_frequency}_walkforward_final.pth"
 
 
-def collect_data(ticker: str, api_key: Optional[str] = None):
+def collect_data(ticker: str):
     print(f"\n{'='*80}\nDATA COLLECTION\n{'='*80}\n")
     print(f"To collect data for {ticker}:")
     print("1. Ensure the ticker is in data.py `TICKERS` (and add symbol-specific fetches if needed)")
@@ -271,7 +271,7 @@ def compare_methods(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="IntelliSense — RAG + RL trading CLI",
+        description="IntelliSense: RAG + RL trading CLI",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -337,7 +337,7 @@ Examples:
         sys.exit(1)
 
     if args.command == "collect":
-        collect_data(args.ticker, args.api_key)
+        collect_data(args.ticker)
     elif args.command == "rag":
         process_ticker(args.ticker)
     elif args.command == "train":

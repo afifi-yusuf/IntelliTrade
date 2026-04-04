@@ -175,6 +175,6 @@ class FactExtractorAgent:
             if f.get('change'):
                 line += f" ({f['change']})"
             if f.get('context'):
-                line += f" — {f['context']}"
+                line += f" - {f['context']}"
             lines.append(line)
         return "\n".join(lines)

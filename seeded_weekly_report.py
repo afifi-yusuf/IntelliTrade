@@ -1,4 +1,4 @@
-"""Shared helpers for `backtest_analysis_seeded_weekly_compare.ipynb`."""
+"""Shared helpers for `notebooks/backtest_analysis_seeded_weekly_compare.ipynb`."""
 
 from __future__ import annotations
 

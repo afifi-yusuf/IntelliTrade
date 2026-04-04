@@ -11,7 +11,7 @@ This project is a **context-enriched RL trading system**:
 - train a DQN policy on multi-ticker historical data,
 - freeze the model and run inference from `2024-01-01` onward.
 
-Current production comparison in `/Users/yusufafifi/Desktop/IntelliSense/run.py` is:
+Current production comparison in `run.py` is:
 
 - `dqn` (LLM + CTKG + price features)
 - `dqn_nollm` (price-only DQN)
@@ -19,7 +19,7 @@ Current production comparison in `/Users/yusufafifi/Desktop/IntelliSense/run.py`
 
 ## 2) Universe and Time Setup
 
-Ticker universe from `/Users/yusufafifi/Desktop/IntelliSense/data.py`:
+Ticker universe from `data.py`:
 
 - `SPY, NVDA, AAPL, MSFT, AMZN, GOOGL, META, TSLA, ASML, TSM`
 
@@ -34,7 +34,7 @@ Backtest/training simulation behavior:
 
 ## 3) Data Collection (Alpha Vantage) and Why
 
-Data ingestion script: `/Users/yusufafifi/Desktop/IntelliSense/data.py`
+Data ingestion script: `data.py`
 
 ### 3.1 Price and market series
 
@@ -81,7 +81,7 @@ Why: macro regime context for transcript and earnings interpretation.
 
 ## 4) CTKG (Neo4j) Context Engineering
 
-Graph manager: `/Users/yusufafifi/Desktop/IntelliSense/graph_manager.py`
+Graph manager: `graph_manager.py`
 
 ### 4.1 Core schema
 
@@ -133,13 +133,13 @@ Used for:
 
 ## 5) Multi-Agent LLM Pipeline
 
-Pipeline orchestration: `/Users/yusufafifi/Desktop/IntelliSense/llm.py` (`generate_agentic_analysis`)
+Pipeline orchestration: `llm.py` (`generate_agentic_analysis`)
 
-Agents (folder: `/Users/yusufafifi/Desktop/IntelliSense/agents`):
+Agents (folder: `agents`):
 
 ### 5.1 FactExtractorAgent
 
-File: `/Users/yusufafifi/Desktop/IntelliSense/agents/fact_extractor.py`
+File: `agents/fact_extractor.py`
 
 Prompt objective:
 
@@ -155,7 +155,7 @@ Category set:
 
 ### 5.2 PeerAnalystAgent
 
-File: `/Users/yusufafifi/Desktop/IntelliSense/agents/peer_analyst.py`
+File: `agents/peer_analyst.py`
 
 Prompt objective:
 
@@ -167,7 +167,7 @@ Output:
 
 ### 5.3 HistoricalAnalystAgent
 
-File: `/Users/yusufafifi/Desktop/IntelliSense/agents/historical_analyst.py`
+File: `agents/historical_analyst.py`
 
 Prompt objective:
 
@@ -179,7 +179,7 @@ Output:
 
 ### 5.4 SynthesizerAgent
 
-File: `/Users/yusufafifi/Desktop/IntelliSense/agents/synthesizer.py`
+File: `agents/synthesizer.py`
 
 Prompt objective:
 
@@ -212,7 +212,7 @@ These reliability features are passed to DQN as context quality signals.
 
 ## 6) Embedding and RL Feature Pipeline
 
-Vectorizer: `/Users/yusufafifi/Desktop/IntelliSense/vectorizer.py`
+Vectorizer: `vectorizer.py`
 
 Backend priority:
 
@@ -220,10 +220,9 @@ Backend priority:
 2. Azure embedding fallback (`1536-dim`)
 3. TF-IDF fallback (`100-dim`)
 
-Current training code constructs DQN state with embedding + tabular features:
+DQN state size is `dqn_state_dim(embedding_dim)` in `vectorizer.py` (embedding + fixed scalar block `DQN_STATE_SCALAR_DIM = 30`).
 
-- `state_dim = embedding_dim + 7 + 3 + 2 + 1 + 6 + 5`
-- with MiniLM this is `384 + 24 = 408`.
+- With MiniLM (**384**), `state_dim = 414`.
 
 State composition (ordered):
 
@@ -233,7 +232,8 @@ State composition (ordered):
 4. Financial one-hot state (2)
 5. Position ratio (1)
 6. Structured signals from LLM agents (6)
-7. Context reliability meta (5)
+7. Signal deltas (6)
+8. Context reliability meta (5)
 
 Why weekly execution:
 
@@ -244,7 +244,7 @@ Why weekly execution:
 
 ## 7) Markov States and Transitions (Tabular RL Agent)
 
-Agent: `/Users/yusufafifi/Desktop/IntelliSense/rl_agent.py`
+Agent: `rl_agent.py`
 
 Discrete Markov state:
 
@@ -266,7 +266,7 @@ Transitions and learning:
 
 ## 8) DQN Design
 
-Agent/network: `/Users/yusufafifi/Desktop/IntelliSense/dqn_agent.py`
+Agent/network: `dqn_agent.py`
 
 ### 8.1 Action space and current position logic
 
@@ -301,7 +301,7 @@ For reporting/sizing compatibility, confidence is computed as:
 
 ## 9) Training Protocol (50 Epochs, All Stocks)
 
-Training entry: `/Users/yusufafifi/Desktop/IntelliSense/train.py`
+Training entry: `train.py`
 
 Configuration:
 
@@ -313,13 +313,13 @@ Configuration:
 
 Graph/cache behavior during training:
 
-- `read_only=True` in training backtest instances (no graph writes),
-- in-memory `summary_cache` persists by ticker across epochs to reduce repeated LLM calls once populated.
+- When LLM is on: epoch 1 may write Neo4j cache; later epochs use `read_only` so reused summaries do not re-hit the graph writers.
+- In-memory `summary_cache` persists by ticker across epochs.
 
 Typical command:
 
 ```bash
-python3 /Users/yusufafifi/Desktop/IntelliSense/run.py train --method dqn --epochs 50 --cutoff 2024-01-01
+python3 run.py train --method dqn --epochs 50 --cutoff 2024-01-01
 ```
 
 
@@ -334,29 +334,31 @@ Inference mode:
 Single-method inference:
 
 ```bash
-python3 /Users/yusufafifi/Desktop/IntelliSense/run.py backtest \
+python3 run.py backtest \
   --method dqn \
   --ticker NVDA \
   --no-learning \
-  --load-model /Users/yusufafifi/Desktop/IntelliSense/backtest_results/dqn_model_walkforward_final.pth \
+  --load-model backtest_results/dqn_model_walkforward_final.pth \
   --start-date 2024-01-01
 ```
 
 Comparison (LLM DQN vs no-LLM DQN):
 
 ```bash
-python3 /Users/yusufafifi/Desktop/IntelliSense/run.py compare --ticker NVDA
+python3 run.py compare --ticker NVDA
 ```
 
 
 ## 11) End-to-End Operational Flow
 
-1. Collect/update raw data from Alpha Vantage into `/Users/yusufafifi/Desktop/IntelliSense/data`.
+1. Collect/update raw data from Alpha Vantage into `data/` (or use existing CSVs).
 2. Ensure Neo4j is running and reachable via env vars.
 3. (Optional but recommended) warm context cache by running LLM-mode backtests.
 4. Train `dqn` for 50 epochs with cutoff split.
 5. Freeze model and run post-`2024-01-01` inference.
 6. Compare against `dqn_nollm` to isolate LLM/CTKG value-add.
+
+Exploratory plots and seeded multi-ticker summaries: Jupyter notebooks under `notebooks/` (see root `README.md`).
 
 
 ## 12) What Is Currently Implemented vs Not

@@ -1,102 +1,84 @@
-# IntelliSense DQN Workflow (Neo4j Empty -> Populate -> Train -> Inference)
+# IntelliSense
 
-This README is a practical runbook for the **DQN (LLM-enabled)** path only.
+Context-enriched RL trading: local CSVs + **Neo4j** (causal-temporal graph) + multi-agent **LLM** signals, fused with price features into **DQN** policies. Two trained variants: **`dqn`** (full context) and **`dqn_nollm`** (price-only).
 
-## 1. Setup
+Full architecture, schema, and training details: **[`PROJECT_DESIGN_IMPLEMENTATION.md`](PROJECT_DESIGN_IMPLEMENTATION.md)**.
+
+---
+
+## Setup
 
 ```bash
-cd /Users/yusufafifi/Desktop/IntelliSense
 python3 -m venv venv
-source venv/bin/activate
+source venv/bin/activate   # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-Create `.env` in project root:
+Create **`.env`** at the repo root. Typical names: `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_DEPLOYMENT` (see `llm.py`), `NEO4J_URI`, `NEO4J_USERNAME`, `NEO4J_PASSWORD`, `ALPHA_VANTAGE_API_KEY` (see `data.py`).
+
+---
+
+## Data
+
+Tickers live in **`data.py`**. Refresh CSVs under **`data/`** when needed:
 
 ```bash
-AZURE_OPENAI_ENDPOINT=...
-AZURE_OPENAI_API_KEY=...
-AZURE_OPENAI_DEPLOYMENT_NAME=...
-AZURE_OPENAI_API_VERSION=...
-NEO4J_URI=bolt://localhost:7687
-NEO4J_USERNAME=neo4j
-NEO4J_PASSWORD=...
-ALPHA_VANTAGE_API_KEY=...
+python data.py
 ```
 
-## 2. (Optional) Fetch / Refresh Market Data
+---
 
-If needed, update tickers in `data.py` and run:
+## CLI (`run.py`)
+
+All commands assume the **repository root** as the working directory.
+
+| Command | Purpose |
+|--------|---------|
+| `python run.py train --method dqn --epochs 50 --cutoff 2024-01-01` | Walk-forward-style training (shared DQN across tickers) |
+| `python run.py train --method dqn_nollm ...` | Price-only DQN |
+| `python run.py backtest --method dqn --ticker NVDA --no-learning --load-model backtest_results/dqn_model_walkforward_final.pth --start-date 2024-01-01` | Frozen inference |
+| `python run.py compare --ticker NVDA` | Compare `dqn` vs `dqn_nollm` |
+
+**Neo4j:** first-time graph population often uses LLM-mode backtest **without** saving a model, e.g. `python run.py backtest --method dqn --ticker AAPL --no-learning --no-save` (repeat per ticker if needed). Evaluation paths use read-only graph access where configured.
+
+---
+
+## Analysis notebooks
+
+Jupyter notebooks live in **`notebooks/`**:
+
+- `backtest_analysis.ipynb` — multi-method comparisons  
+- `backtest_analysis_daily.ipynb`, `backtest_analysis_daily_dqn_nollm.ipynb` — daily cadence variants  
+- `backtest_analysis_dqn_nollm.ipynb` — no-LLM analysis  
+- `backtest_analysis_seeded_weekly_compare.ipynb` — seeded weekly DQN vs no-LLM vs buy-and-hold (uses **`seeded_weekly_report.py`** + CSV under **`test_results/seeded_weekly_full/`**)
+
+The **first code cell** in each notebook switches to the repo root when the kernel’s working directory is `notebooks/`, so paths like `data/` and `test_results/` keep working.
+
+---
+
+## Seeded weekly benchmark (optional)
+
+Multi-seed train + backtest, aggregate CSVs, and a minimal generated notebook:
 
 ```bash
-venv/bin/python data.py
+python seeded_weekly_compare.py --output-dir test_results/seeded_weekly_full
 ```
 
-## 3. Start From Empty Neo4j
+Rich tables and plots: open **`notebooks/backtest_analysis_seeded_weekly_compare.ipynb`**. Editable summary numbers: **`test_results/seeded_weekly_full/seeded_weekly_async_by_ticker.csv`**.
 
-If your DB is empty, that is fine.  
-You can verify counts in Neo4j Browser:
+---
 
-```cypher
-MATCH (s:Summary) RETURN count(s);
-MATCH (f:Fact) RETURN count(f);
-```
+## Outputs
 
-## 4. Populate Neo4j Cache (DQN, No Learning)
+| Location | Contents |
+|----------|-----------|
+| **`backtest_results/`** | Checkpoints (`*_walkforward_final.pth`), Q-tables, seed copies |
+| **`test_results/`** | Run logs, histories, seeded summaries, generated `seeded_weekly_generated.ipynb` |
 
-Run one populate pass so quarterly summaries/facts are written to Neo4j.
+---
 
-```bash
-cd /Users/yusufafifi/Desktop/IntelliSense
-for t in MSFT AMZN TSLA TSM ASML NVDA GOOGL META AAPL; do
-  venv/bin/python run.py backtest --method dqn --ticker "$t" --no-learning --no-save
-done
-```
+## Shared Python utilities
 
-What this does:
-- Uses DQN with LLM/context path enabled.
-- Writes graph cache (`Summary`, `Fact`, etc.) because backtest runs with write mode by default.
-- Does **not** train or save model weights (`--no-learning --no-save`).
-
-## 5. Train DQN (Walk-Forward Style)
-
-Train on data before cutoff:
-
-```bash
-cd /Users/yusufafifi/Desktop/IntelliSense
-venv/bin/python run.py train --method dqn --epochs 50 --cutoff 2024-01-01
-```
-
-Expected output checkpoint:
-
-`/Users/yusufafifi/Desktop/IntelliSense/backtest_results/dqn_model_walkforward_final.pth`
-
-## 6. Inference / Backtest DQN (No Learning)
-
-Run inference from 2024 onward with trained model:
-
-```bash
-cd /Users/yusufafifi/Desktop/IntelliSense
-venv/bin/python run.py backtest \
-  --method dqn \
-  --ticker NVDA \
-  --no-learning \
-  --load-model /Users/yusufafifi/Desktop/IntelliSense/backtest_results/dqn_model_walkforward_final.pth \
-  --start-date 2024-01-01
-```
-
-## 7. Where Results Are Saved
-
-Backtest artifacts are written under:
-
-`/Users/yusufafifi/Desktop/IntelliSense/backtest_results/`
-
-Comparison/test history files are written under:
-
-`/Users/yusufafifi/Desktop/IntelliSense/test_results/`
-
-## Notes
-
-- `read_only=True` mode is used for safe evaluation/compare paths; it reads cache but does not write Neo4j.
-- For first-time population on an empty DB, use `run.py backtest --method dqn ... --no-learning --no-save` as shown above.
-- If you change prompt/schema/agent logic significantly, repopulate Neo4j before retraining.
+- **`reproducibility.py`** — `set_random_seed` for training/benchmarks  
+- **`vectorizer.py`** — `dqn_state_dim()` / `DQN_STATE_SCALAR_DIM` (single source for DQN input size)  
+- **`seeded_weekly_report.py`** — helpers for the seeded weekly notebook  

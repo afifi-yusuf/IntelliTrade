@@ -269,7 +269,7 @@ def main() -> None:
     print(f"Summary: {summary_csv.as_posix()}")
     print(f"Delta: {comparison_csv.as_posix()}")
     print(f"Auto notebook (minimal): {gen_nb.as_posix()}")
-    print("Full analysis: backtest_analysis_seeded_weekly_compare.ipynb")
+    print("Full analysis: notebooks/backtest_analysis_seeded_weekly_compare.ipynb")
 
 
 if __name__ == "__main__":
